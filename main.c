@@ -5,6 +5,7 @@
  * https://github.com/cirosantilli/cpp-cheat/blob/master/opengl/gles/triangle.c
  */
 #include <errno.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +36,54 @@ static const GLfloat mat[] = {
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
+
+char **gargv;
+
+void brown(float xcoord, float ycoord, float *xout, float *yout)
+{
+	float K[] = { 5.12f, -0.36f, 0.00f, 1.0f };
+	double xdiff = (xcoord * 2) - 1;
+	double ydiff = (ycoord * 2) - 1;
+	double r = sqrt(xdiff*xdiff + ydiff*ydiff);
+	double newr;
+	double xunit;
+	double yunit;
+
+	xunit = xdiff / r;
+	if (isnan(xunit)) {
+		xunit = 0;
+	}
+
+	yunit = ydiff / r;
+	if (isnan(yunit)) {
+		yunit = 0;
+	}
+
+	sscanf(gargv[1], "%f", &K[0]);
+	sscanf(gargv[2], "%f", &K[1]);
+	sscanf(gargv[3], "%f", &K[2]);
+	sscanf(gargv[4], "%f", &K[3]);
+	K[3] = K[3] - (K[0] + K[1] + K[2]);
+
+	// Same algorithm used by ImageMagick.
+	// Defined by Professor Helmut Dersch:
+	// http://replay.waybackmachine.org/20090613040829/http://www.all-in-one.ee/~dersch/barrel/barrel.html
+	// http://www.imagemagick.org/Usage/distorts/#barrel
+	newr = r * (K[0]*pow(r, 3) + K[1]*pow(r,2) + K[2]*r + K[3]);
+
+	*xout = (newr*xunit + 1) / 2;
+	*yout = (newr*yunit + 1) / 2;
+
+	/*
+	*xout = (0.5 + (xdiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
+	*yout = (0.5 + (ydiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
+	*/
+
+	/*
+	*xout = xcoord + (xdiff * K[0] * r * r) + (xdiff * K[1] * r * r *r * r);
+	*yout = ycoord + (ydiff * K[0] * r * r) + (ydiff * K[1] * r * r *r * r);
+	*/
+}
 
 GLint get_shader(void)
 {
@@ -95,7 +144,7 @@ struct mesh *get_mesh()
 		return NULL;
 	}
 
-	mesh->mesh = mesh_build(MESHPOINTS, MESHPOINTS, NULL, &mesh->nverts);
+	mesh->mesh = mesh_build(MESHPOINTS, MESHPOINTS, brown, &mesh->nverts);
 	if (!mesh->mesh) {
 		free(mesh);
 		return NULL;
@@ -140,6 +189,8 @@ int main(int argc, char *argv[]) {
 	struct pint *pint = pint_initialise(WIDTH, HEIGHT);
 	check(pint);
 
+	gargv = argv;
+
 	pm_init(argv[0], 0);
 
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
@@ -180,6 +231,7 @@ int main(int argc, char *argv[]) {
 	while(!pint->should_end(pint)) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
+#if 1
 		glUseProgram(shader_program);
 		glUniform1i(texLoc, 0);
 		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
@@ -192,7 +244,7 @@ int main(int argc, char *argv[]) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-		/*
+#else
 		glUseProgram(shader_program);
 		glUniform1i(texLoc, 0);
 		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
@@ -204,7 +256,7 @@ int main(int argc, char *argv[]) {
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		*/
+#endif
 
 		pint->swap_buffers(pint);
 		clock_gettime(CLOCK_MONOTONIC, &b);
