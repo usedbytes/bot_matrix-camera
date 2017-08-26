@@ -180,7 +180,6 @@ int main(int argc, char *argv[]) {
 	while(!pint->should_end(pint)) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		/*
 		glUseProgram(shader_program);
 		glUniform1i(texLoc, 0);
 		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
@@ -192,8 +191,8 @@ int main(int argc, char *argv[]) {
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		*/
 
+		/*
 		glUseProgram(shader_program);
 		glUniform1i(texLoc, 0);
 		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
@@ -205,6 +204,7 @@ int main(int argc, char *argv[]) {
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		*/
 
 		pint->swap_buffers(pint);
 		clock_gettime(CLOCK_MONOTONIC, &b);
