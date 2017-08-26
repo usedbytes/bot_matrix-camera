@@ -145,6 +145,9 @@ int main(int argc, char *argv[]) {
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
+	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+	glViewport(0, 0, WIDTH, HEIGHT);
+
 	ret = get_shader();
 	check(ret >= 0);
 	shader_program = ret;
