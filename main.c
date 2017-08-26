@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <pam.h>
 
@@ -120,12 +121,21 @@ struct mesh *get_mesh()
 	return mesh;
 }
 
+long elapsed_nanos(struct timespec a, struct timespec b)
+{
+	unsigned int sec = b.tv_sec - a.tv_sec;
+	long nanos = b.tv_nsec - a.tv_nsec;
+
+	return nanos + (1000000000 * sec);
+}
+
 int main(int argc, char *argv[]) {
 	GLint ret;
 	GLuint shader_program;
 	GLint posLoc, tcLoc, mvpLoc, texLoc;
 	struct texture *tex;
 	struct mesh *mesh;
+	struct timespec a, b;
 
 	struct pint *pint = pint_initialise(WIDTH, HEIGHT);
 	check(pint);
@@ -163,6 +173,7 @@ int main(int argc, char *argv[]) {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -192,8 +203,13 @@ int main(int argc, char *argv[]) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-
 		pint->swap_buffers(pint);
+		clock_gettime(CLOCK_MONOTONIC, &b);
+		if (a.tv_sec != b.tv_sec) {
+			long time = elapsed_nanos(a, b);
+			printf("%.3f fps\n", 1000000000.0 / (float)time);
+		}
+		a = b;
 	}
 
 	pint->terminate(pint);
