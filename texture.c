@@ -25,7 +25,11 @@ struct texture *texture_load(const char *file)
 		return NULL;
 	}
 
+#ifndef PAM_STRUCT_SIZE
+	pnm_readpaminit(fp, &inpam, sizeof(inpam));
+#else
 	pnm_readpaminit(fp, &inpam, PAM_STRUCT_SIZE(tuple_type));
+#endif
 
 	tuplerow = pnm_allocpamrow(&inpam);
 
