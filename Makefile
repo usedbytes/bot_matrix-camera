@@ -1,7 +1,9 @@
 TARGET=camera
-SRC=main.c pint_glfw.c
-LIBS=-lglut -lGL -lglfw
-CFLAGS=-g -Wall
+SRC=main.c pint_glfw.c shader.c texture.c mesh.c
+LIBS=-lglut -lGL -lglfw -lnetpbm
+CFLAGS=-g -Wall -I/usr/include/netpbm
+
+.PHONY: clean
 
 OBJS := $(patsubst %.c,%.o,$(SRC))
 
@@ -10,3 +12,6 @@ OBJS := $(patsubst %.c,%.o,$(SRC))
 
 $(TARGET): $(OBJS)
 	gcc -o $@ $(OBJS) $(LIBS)
+
+clean:
+	rm -rf $(OBJS) $(TARGET)

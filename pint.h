@@ -3,10 +3,11 @@
  */
 #ifndef __PINT_H__
 #define __PINT_H__
-
+#include <stdbool.h>
 
 struct pint {
 	void (*swap_buffers)(struct pint *);
+	bool (*should_end)(struct pint *);
 	void (*terminate)(struct pint *);
 };
 

@@ -26,6 +26,14 @@ static void swap_buffers(struct pint *p)
 	glfwSwapBuffers(pint->window);
 }
 
+static bool should_end(struct pint *p)
+{
+	struct glfw_pint *pint = GLFW_PINT(p);
+
+	glfwPollEvents();
+	return glfwWindowShouldClose(pint->window);
+}
+
 static void terminate(struct pint *p)
 {
 	p = NULL;
@@ -40,6 +48,7 @@ struct pint *pint_initialise(uint32_t width, uint32_t height)
 
 	pint->base.swap_buffers = swap_buffers;
 	pint->base.terminate = terminate;
+	pint->base.should_end = should_end;
 
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
