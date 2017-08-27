@@ -41,8 +41,11 @@ char **gargv;
 
 void brown(float xcoord, float ycoord, float *xout, float *yout)
 {
+	double asp = (double)(WIDTH) / (double)(HEIGHT);
+	double xoffs = ((double)(WIDTH - HEIGHT) / 2.0f) / (double)HEIGHT;
 	float K[] = { 5.12f, -0.36f, 0.00f, 1.0f };
-	double xdiff = (xcoord * 2) - 1;
+	//double xdiff = (xcoord * 2) - 1;
+	double xdiff = (((xcoord * asp) - xoffs) * 2) - 1;
 	double ydiff = (ycoord * 2) - 1;
 	double r = sqrt(xdiff*xdiff + ydiff*ydiff);
 	double newr;
@@ -71,7 +74,7 @@ void brown(float xcoord, float ycoord, float *xout, float *yout)
 	// http://www.imagemagick.org/Usage/distorts/#barrel
 	newr = r * (K[0]*pow(r, 3) + K[1]*pow(r,2) + K[2]*r + K[3]);
 
-	*xout = (newr*xunit + 1) / 2;
+	*xout = (((newr*xunit + 1) / 2) + xoffs) / asp;
 	*yout = (newr*yunit + 1) / 2;
 
 	/*
