@@ -148,13 +148,12 @@ struct camera_buffer *camera_dequeue_buffer(struct camera *camera)
 
 void camera_queue_buffer(struct camera *camera, struct camera_buffer *buf)
 {
-	MMAL_BUFFER_HEADER_T *free_buf;
+	MMAL_BUFFER_HEADER_T *free_buf = NULL;
 
 	mmal_buffer_header_release(buf->hnd);
 	free(buf);
 
-	free_buf = mmal_queue_get(camera->pool->free_pool->queue);
-	if (free_buf) {
+	while ((free_buf = mmal_queue_get(camera->pool->free_pool->queue))) {
 		MMAL_STATUS_T ret = mmal_port_send_buffer(camera->port, free_buf);
 		if (ret != MMAL_SUCCESS)
 			fprintf(stderr, "Couldn't queue free buffer: %d\n", ret);
@@ -175,6 +174,8 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 void camera_exit(struct camera *camera)
 {
+	if (camera->port->is_enabled)
+		mmal_port_disable(camera->port);
 	buffer_pool_cleanup(camera->pool);
 	component_cleanup(camera->component);
 	free(camera);
