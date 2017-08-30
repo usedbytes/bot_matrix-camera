@@ -40,6 +40,12 @@ static void terminate(struct pint *p)
 	glfwTerminate();
 }
 
+static EGLDisplay get_egl_display(struct pint *p)
+{
+	p = NULL;
+	return EGL_NO_DISPLAY;
+}
+
 struct pint *pint_initialise(uint32_t width, uint32_t height)
 {
 	struct glfw_pint *pint = malloc(sizeof(*pint));
@@ -49,6 +55,7 @@ struct pint *pint_initialise(uint32_t width, uint32_t height)
 	pint->base.swap_buffers = swap_buffers;
 	pint->base.terminate = terminate;
 	pint->base.should_end = should_end;
+	pint->base.get_egl_display = get_egl_display;
 
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);

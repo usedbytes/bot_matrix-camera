@@ -87,6 +87,13 @@ static void terminate(struct pint *p)
 	eglTerminate(pint->display);
 }
 
+static EGLDisplay get_egl_display(struct pint *p)
+{
+	struct piegl_pint *pint = PIEGL_PINT(p);
+
+	return pint->display;
+}
+
 struct pint *pint_initialise(uint32_t width, uint32_t height)
 {
 	int32_t success = 0;
@@ -118,6 +125,7 @@ struct pint *pint_initialise(uint32_t width, uint32_t height)
 	pint->base.swap_buffers = swap_buffers;
 	pint->base.terminate = terminate;
 	pint->base.should_end = should_end;
+	pint->base.get_egl_display = get_egl_display;
 
 	// get an EGL display connection
 	pint->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
