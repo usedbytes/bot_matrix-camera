@@ -37,8 +37,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <memory.h>
 
-extern "C"
-{
 #include "interface/vcos/vcos.h"
 #include "interface/vmcs_host/vc_vchi_gencmd.h"
 #include "interface/mmal/mmal.h"
@@ -46,7 +44,6 @@ extern "C"
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
 #include "interface/mmal/util/mmal_default_components.h"
-};
 
 #include "cameracontrol.h"
 
