@@ -36,6 +36,8 @@
 
 #include "pint.h"
 
+extern volatile bool should_exit;
+
 #define PIEGL_PINT(_pint) ((struct piegl_pint *)_pint)
 struct piegl_pint {
 	struct pint base;
@@ -60,7 +62,7 @@ static void swap_buffers(struct pint *p)
 
 static bool should_end(struct pint *p)
 {
-	return false;
+	return should_exit;
 }
 
 static void terminate(struct pint *p)

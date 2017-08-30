@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 
 #include <pam.h>
@@ -25,6 +26,13 @@
 #define WIDTH 800
 #define HEIGHT 600
 #define MESHPOINTS 30
+
+volatile bool should_exit = 0;
+
+void intHandler(int dummy) {
+	printf("Caught signal.\n");
+	should_exit = 1;
+}
 
 /*
  * Simple MVP matrix which flips the Y axis (so 0,0 is top left) and
