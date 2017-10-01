@@ -263,22 +263,14 @@ void draw_elements(struct drawcall *dc)
 
 GLint posLoc, tcLoc, mvpLoc, texLoc;
 
-struct drawcall *setup_draw(const GLfloat *mat)
+struct drawcall *setup_draw(const GLfloat *mat, struct texture *tex, struct mesh *mesh)
 {
 	struct drawcall *dc = malloc(sizeof(*dc));
-	struct mesh *mesh;
-	struct texture *tex;
 	int ret;
 
 	ret = get_shader();
 	check(ret >= 0);
 	dc->shader_program = ret;
-
-	mesh = get_mesh();
-	check(mesh);
-
-	tex = get_texture();
-	check(tex);
 
 	glUseProgram(dc->shader_program);
 
@@ -307,9 +299,9 @@ struct drawcall *setup_draw(const GLfloat *mat)
 
 	dc->n_textures = 1;
 #if defined(USE_PI_CAMERA)
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex->handle };
-#else
 	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_EXTERNAL_OES, .handle = tex->handle };
+#else
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex->handle };
 #endif
 	// free texture?
 
@@ -373,6 +365,14 @@ int main(int argc, char *argv[]) {
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
+	struct mesh *mesh;
+	struct texture *tex;
+	mesh = get_mesh();
+	check(mesh);
+
+	tex = get_texture();
+	check(tex);
+
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -385,9 +385,9 @@ int main(int argc, char *argv[]) {
 #endif
 
 	struct drawcall *dcs[2];
-	dcs[0] = setup_draw(mat);
+	dcs[0] = setup_draw(mat, tex, mesh);
 	check(dcs[0]);
-	dcs[1] = setup_draw(mat2);
+	dcs[1] = setup_draw(mat2, tex, mesh);
 	check(dcs[1]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
