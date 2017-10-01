@@ -56,6 +56,13 @@ static const GLfloat mat[] = {
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
 
+static const GLfloat mat2[] = {
+	0.3f,  0.0f,  0.0f, -1.0f,
+	0.0f, -0.3f,  0.0f,  1.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
 float coeffs[] = { 0, 0, 0, 1.0 };
 
 void brown(float xcoord, float ycoord, float *xout, float *yout)
@@ -223,12 +230,122 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 	return nanos + (1000000000 * sec);
 }
 
-int main(int argc, char *argv[]) {
-	GLint ret;
+struct bind {
+	GLuint bind;
+	GLuint handle;
+};
+
+enum uniform_type {
+	UNIFORM_1i = 0,
+	UNIFORM_MAT_F4,
+};
+
+struct uniform {
+	enum uniform_type type;
+	GLuint handle;
+};
+
+struct drawcall {
 	GLuint shader_program;
-	GLint posLoc, tcLoc, mvpLoc, texLoc;
-	struct texture *tex;
+	unsigned int n_buffers, n_textures, n_uniforms;
+	struct bind buffers[10];
+	struct bind textures[10];
+	struct bind uniforms[10];
+	unsigned int n_indices;
+
+	void (*draw)(struct drawcall *);
+};
+
+void draw_elements(struct drawcall *dc)
+{
+	glDrawElements(GL_TRIANGLE_STRIP, dc->n_indices, GL_UNSIGNED_SHORT, 0);
+}
+
+GLint posLoc, tcLoc, mvpLoc, texLoc;
+
+struct drawcall *setup_draw(const GLfloat *mat)
+{
+	struct drawcall *dc = malloc(sizeof(*dc));
 	struct mesh *mesh;
+	struct texture *tex;
+	int ret;
+
+	ret = get_shader();
+	check(ret >= 0);
+	dc->shader_program = ret;
+
+	mesh = get_mesh();
+	check(mesh);
+
+	tex = get_texture();
+	check(tex);
+
+	glUseProgram(dc->shader_program);
+
+	posLoc = glGetAttribLocation(dc->shader_program, "position");
+	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
+	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
+	texLoc = glGetUniformLocation(dc->shader_program, "tex");
+
+	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
+	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
+	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
+	glEnableVertexAttribArray(posLoc);
+	glEnableVertexAttribArray(tcLoc);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	glUniform1i(texLoc, 0);
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
+
+	dc->n_buffers = 2;
+	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
+	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
+	dc->n_indices = mesh->nindices;
+	// free mesh
+
+	dc->n_textures = 1;
+#if defined(USE_PI_CAMERA)
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex->handle };
+#else
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_EXTERNAL_OES, .handle = tex->handle };
+#endif
+	// free texture?
+
+	dc->draw = draw_elements;
+
+	glUseProgram(0);
+
+	return dc;
+}
+
+void do_draw(struct drawcall *dc)
+{
+	int i;
+	glUseProgram(dc->shader_program);
+	for (i = 0; i < dc->n_textures; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(dc->textures[i].bind, dc->textures[i].handle);
+	}
+	for (i = 0; i < dc->n_buffers; i++) {
+		glBindBuffer(dc->buffers[i].bind, dc->buffers[i].handle);
+	}
+
+	dc->draw(dc);
+
+	for (i = 0; i < dc->n_buffers; i++) {
+		glBindBuffer(dc->buffers[i].bind, 0);
+	}
+	for (i = 0; i < dc->n_textures; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(dc->textures[i].bind, 0);
+	}
+	glUseProgram(0);
+}
+
+int main(int argc, char *argv[]) {
+	int i;
 	struct timespec a, b;
 #if defined(USE_PI_CAMERA)
 	EGLDisplay display;
@@ -259,34 +376,6 @@ int main(int argc, char *argv[]) {
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
-	ret = get_shader();
-	check(ret >= 0);
-	shader_program = ret;
-
-	posLoc = glGetAttribLocation(shader_program, "position");
-	tcLoc = glGetAttribLocation(shader_program, "tc");
-	mvpLoc = glGetUniformLocation(shader_program, "mvp");
-	texLoc = glGetUniformLocation(shader_program, "tex");
-
-	tex = get_texture();
-	check(tex);
-
-	mesh = get_mesh();
-	check(mesh);
-	printf("Mesh:\n");
-	mesh_dump(mesh->mesh, MESHPOINTS, MESHPOINTS);
-	printf("Indices:\n");
-	mesh_indices_dump(mesh->indices, mesh->nindices);
-
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
-	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
-	glEnableVertexAttribArray(posLoc);
-	glEnableVertexAttribArray(tcLoc);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
 #if defined(USE_PI_CAMERA)
 	camera = camera_init(WIDTH, HEIGHT, 60);
 	if (!camera) {
@@ -294,6 +383,12 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 #endif
+
+	struct drawcall *dcs[2];
+	dcs[0] = setup_draw(mat);
+	check(dcs[0]);
+	dcs[1] = setup_draw(mat2);
+	check(dcs[1]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -310,31 +405,19 @@ int main(int argc, char *argv[]) {
 		yimg = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, buf->egl_buf, NULL);
 		glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex->handle);
 		glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, yimg);
+		glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 		/*
 		 * This seems to be needed, otherwise there's garbage for the
 		 * first few frames
 		 */
 		glFinish();
-#else
-		glBindTexture(GL_TEXTURE_2D, tex->handle);
 #endif
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		glUseProgram(shader_program);
-		glUniform1i(texLoc, 0);
-		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
-		glActiveTexture(GL_TEXTURE0);
-		glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-		glDrawElements(GL_TRIANGLE_STRIP, mesh->nindices, GL_UNSIGNED_SHORT, 0);
 
-#if defined(USE_PI_CAMERA)
-		glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-#else
-		glBindTexture(GL_TEXTURE_2D, 0);
-#endif
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		for (i = 0; i < 2; i++) {
+			do_draw(dcs[i]);
+		}
 
 		pint->swap_buffers(pint);
 #if defined(USE_PI_CAMERA)
