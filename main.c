@@ -190,10 +190,12 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 
 GLint posLoc, tcLoc, mvpLoc, texLoc;
 
-struct drawcall *setup_draw(const GLfloat *mat, GLuint tex, struct mesh *mesh)
+struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
 {
-	struct drawcall *dc = malloc(sizeof(*dc));
+	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
+
+	dc->yidx = dc->uidx = dc->vidx = -1;
 
 	ret = get_shader();
 	check(ret >= 0);
@@ -225,12 +227,8 @@ struct drawcall *setup_draw(const GLfloat *mat, GLuint tex, struct mesh *mesh)
 	// free mesh
 
 	dc->n_textures = 1;
-#if defined(USE_PI_CAMERA)
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_EXTERNAL_OES, .handle = tex };
-#else
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex };
-#endif
-	// free texture?
+	// TEXTURE0 is Y
+	dc->yidx = 0;
 
 	dc->draw = draw_elements;
 
@@ -269,9 +267,9 @@ int main(int argc, char *argv[]) {
 	check(feed);
 
 	struct drawcall *dcs[2];
-	dcs[0] = setup_draw(mat, feed->ytex, mesh);
+	dcs[0] = setup_draw(mat, mesh);
 	check(dcs[0]);
-	dcs[1] = setup_draw(mat2, feed->ytex, mesh);
+	dcs[1] = setup_draw(mat2, mesh);
 	check(dcs[1]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
@@ -285,7 +283,7 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		for (i = 0; i < 2; i++) {
-			drawcall_draw(dcs[i]);
+			drawcall_draw(feed, dcs[i]);
 		}
 
 		pint->swap_buffers(pint);

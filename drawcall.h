@@ -9,25 +9,16 @@
 
 #include <GLES2/gl2.h>
 
-struct bind {
-	GLuint bind;
-	GLuint handle;
-};
-
-enum uniform_type {
-	UNIFORM_1i = 0,
-	UNIFORM_MAT_F4,
-};
-
-struct uniform {
-	enum uniform_type type;
-	GLuint handle;
-};
+#include "types.h"
+#include "feed.h"
 
 struct drawcall {
 	GLuint shader_program;
 	unsigned int n_buffers, n_textures, n_uniforms;
+	int yidx, uidx, vidx;
 	struct bind buffers[10];
+	/* Massive hack... any -1 special indexes land in scratch */
+	struct bind scratch;
 	struct bind textures[10];
 	struct bind uniforms[10];
 	unsigned int n_indices;
@@ -37,6 +28,6 @@ struct drawcall {
 
 void draw_elements(struct drawcall *dc);
 
-void drawcall_draw(struct drawcall *dc);
+void drawcall_draw(struct feed *feed, struct drawcall *dc);
 
 #endif /* __DRAWCALL_H__ */

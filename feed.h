@@ -10,9 +10,10 @@
 #include <GLES2/gl2.h>
 
 #include "pint.h"
+#include "types.h"
 
 struct feed {
-	GLuint ytex, utex, vtex;
+	struct bind ytex, utex, vtex;
 
 	void (*terminate)(struct feed *f);
 	int (*dequeue)(struct feed *f);

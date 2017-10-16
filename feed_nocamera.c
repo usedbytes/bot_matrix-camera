@@ -12,7 +12,7 @@
 
 static void terminate(struct feed *feed)
 {
-	glDeleteTextures(1, &feed->ytex);
+	glDeleteTextures(1, &feed->ytex.handle);
 
 	free(feed);
 }
@@ -44,9 +44,10 @@ struct feed *feed_init(struct pint *pint)
 		return NULL;
 	}
 
-	glGenTextures(1, &feed->ytex);
+	feed->ytex.bind = GL_TEXTURE_2D;
+	glGenTextures(1, &feed->ytex.handle);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, feed->ytex);
+	glBindTexture(GL_TEXTURE_2D, feed->ytex.handle);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

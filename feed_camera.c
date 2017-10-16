@@ -34,7 +34,7 @@ static void terminate(struct feed *f)
 		eglDestroyImageKHR(feed->display, feed->yimg);
 		feed->yimg = EGL_NO_IMAGE_KHR;
 	}
-	glDeleteTextures(1, &feed->base.ytex);
+	glDeleteTextures(1, &feed->base.ytex.handle);
 
 	camera_exit(feed->camera);
 
@@ -55,7 +55,7 @@ static int dequeue(struct feed *f)
 		feed->yimg = EGL_NO_IMAGE_KHR;
 	}
 	feed->yimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex.handle);
 	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->yimg);
 	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 	/*
@@ -87,9 +87,10 @@ struct feed *feed_init(struct pint *pint)
 		exit(1);
 	}
 
-	glGenTextures(1, &feed->base.ytex);
+	feed->base.ytex.bind = GL_TEXTURE_EXTERNAL_OES;
+	glGenTextures(1, &feed->base.ytex.handle);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex.handle);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
