@@ -23,6 +23,7 @@
 #include "texture.h"
 #include "mesh.h"
 #include "feed.h"
+#include "drawcall.h"
 
 #include "EGL/egl.h"
 
@@ -187,37 +188,6 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 	return nanos + (1000000000 * sec);
 }
 
-struct bind {
-	GLuint bind;
-	GLuint handle;
-};
-
-enum uniform_type {
-	UNIFORM_1i = 0,
-	UNIFORM_MAT_F4,
-};
-
-struct uniform {
-	enum uniform_type type;
-	GLuint handle;
-};
-
-struct drawcall {
-	GLuint shader_program;
-	unsigned int n_buffers, n_textures, n_uniforms;
-	struct bind buffers[10];
-	struct bind textures[10];
-	struct bind uniforms[10];
-	unsigned int n_indices;
-
-	void (*draw)(struct drawcall *);
-};
-
-void draw_elements(struct drawcall *dc)
-{
-	glDrawElements(GL_TRIANGLE_STRIP, dc->n_indices, GL_UNSIGNED_SHORT, 0);
-}
-
 GLint posLoc, tcLoc, mvpLoc, texLoc;
 
 struct drawcall *setup_draw(const GLfloat *mat, GLuint tex, struct mesh *mesh)
@@ -269,30 +239,6 @@ struct drawcall *setup_draw(const GLfloat *mat, GLuint tex, struct mesh *mesh)
 	return dc;
 }
 
-void do_draw(struct drawcall *dc)
-{
-	int i;
-	glUseProgram(dc->shader_program);
-	for (i = 0; i < dc->n_textures; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(dc->textures[i].bind, dc->textures[i].handle);
-	}
-	for (i = 0; i < dc->n_buffers; i++) {
-		glBindBuffer(dc->buffers[i].bind, dc->buffers[i].handle);
-	}
-
-	dc->draw(dc);
-
-	for (i = 0; i < dc->n_buffers; i++) {
-		glBindBuffer(dc->buffers[i].bind, 0);
-	}
-	for (i = 0; i < dc->n_textures; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(dc->textures[i].bind, 0);
-	}
-	glUseProgram(0);
-}
-
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
@@ -339,7 +285,7 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		for (i = 0; i < 2; i++) {
-			do_draw(dcs[i]);
+			drawcall_draw(dcs[i]);
 		}
 
 		pint->swap_buffers(pint);

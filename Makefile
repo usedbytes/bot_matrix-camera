@@ -1,5 +1,5 @@
 TARGET=camera
-SRC=main.c shader.c texture.c mesh.c
+SRC=main.c shader.c texture.c mesh.c drawcall.c
 LDFLAGS=-lnetpbm -lm
 CFLAGS=-g -Wall -I/usr/include/netpbm
 
