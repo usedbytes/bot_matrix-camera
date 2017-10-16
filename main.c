@@ -27,13 +27,6 @@
 
 #include "EGL/egl.h"
 
-#if defined(USE_PI_CAMERA)
-#include "camera.h"
-#include "EGL/eglext.h"
-#include "EGL/eglext.h"
-#include "EGL/eglext_brcm.h"
-#endif
-
 #define check(_cond) { if (!(_cond)) { fprintf(stderr, "%s:%d: %s\n", __func__, __LINE__, strerror(errno)); exit(EXIT_FAILURE); }}
 
 #define WIDTH 640
@@ -123,11 +116,7 @@ GLint get_shader(void)
 	printf("Vertex shader:\n");
 	printf("%s\n", vertex_shader_source);
 
-#if defined(USE_PI_CAMERA)
-	fragment_shader_source = shader_load("fragment_external_oes_shader.glsl");
-#else
-	fragment_shader_source = shader_load("fragment_shader.glsl");
-#endif
+	fragment_shader_source = shader_load(FRAGMENT_SHADER);
 	if (!fragment_shader_source) {
 		return -1;
 	}
