@@ -22,15 +22,10 @@
 #include "shader.h"
 #include "texture.h"
 #include "mesh.h"
+#include "feed.h"
+#include "drawcall.h"
 
 #include "EGL/egl.h"
-
-#if defined(USE_PI_CAMERA)
-#include "camera.h"
-#include "EGL/eglext.h"
-#include "EGL/eglext.h"
-#include "EGL/eglext_brcm.h"
-#endif
 
 #define check(_cond) { if (!(_cond)) { fprintf(stderr, "%s:%d: %s\n", __func__, __LINE__, strerror(errno)); exit(EXIT_FAILURE); }}
 
@@ -52,6 +47,13 @@ void intHandler(int dummy) {
 static const GLfloat mat[] = {
 	2.0f,  0.0f,  0.0f, -1.0f,
 	0.0f, -2.0f,  0.0f,  1.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
+static const GLfloat mat2[] = {
+	0.3f,  0.0f,  0.0f, -1.0f,
+	0.0f, -0.3f,  0.0f,  1.0f,
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
@@ -114,11 +116,7 @@ GLint get_shader(void)
 	printf("Vertex shader:\n");
 	printf("%s\n", vertex_shader_source);
 
-#if defined(USE_PI_CAMERA)
-	fragment_shader_source = shader_load("fragment_external_oes_shader.glsl");
-#else
-	fragment_shader_source = shader_load("fragment_shader.glsl");
-#endif
+	fragment_shader_source = shader_load(FRAGMENT_SHADER);
 	if (!fragment_shader_source) {
 		return -1;
 	}
@@ -127,50 +125,6 @@ GLint get_shader(void)
 
 	return shader_compile(vertex_shader_source, fragment_shader_source);
 }
-
-#if defined(USE_PI_CAMERA)
-struct texture *get_texture()
-{
-	struct texture *tex = calloc(1, sizeof(*tex));
-	if (!tex) {
-		fprintf(stderr, "Failed to get texture\n");
-		return NULL;
-	}
-
-	glGenTextures(1, &tex->handle);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex->handle);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-
-	return tex;
-}
-#else
-struct texture *get_texture(void)
-{
-	struct texture *tex = texture_load("texture.pnm");
-	if (!tex) {
-		fprintf(stderr, "Failed to get texture\n");
-		return NULL;
-	}
-
-	glGenTextures(1, &tex->handle);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex->handle);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	return tex;
-}
-#endif
 
 struct mesh {
 	GLfloat *mesh;
@@ -223,25 +177,60 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 	return nanos + (1000000000 * sec);
 }
 
-int main(int argc, char *argv[]) {
-	GLint ret;
-	GLuint shader_program;
-	GLint posLoc, tcLoc, mvpLoc, texLoc;
-	struct texture *tex;
-	struct mesh *mesh;
-	struct timespec a, b;
-#if defined(USE_PI_CAMERA)
-	EGLDisplay display;
-	EGLImageKHR yimg = EGL_NO_IMAGE_KHR;
-	struct camera *camera;
-	struct camera_buffer *buf;
-#endif
+GLint posLoc, tcLoc, mvpLoc, texLoc;
 
+struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
+{
+	struct drawcall *dc = calloc(1, sizeof(*dc));
+	int ret;
+
+	dc->yidx = dc->uidx = dc->vidx = -1;
+
+	ret = get_shader();
+	check(ret >= 0);
+	dc->shader_program = ret;
+
+	glUseProgram(dc->shader_program);
+
+	posLoc = glGetAttribLocation(dc->shader_program, "position");
+	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
+	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
+	texLoc = glGetUniformLocation(dc->shader_program, "tex");
+
+	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
+	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
+	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
+	glEnableVertexAttribArray(posLoc);
+	glEnableVertexAttribArray(tcLoc);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	glUniform1i(texLoc, 0);
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
+
+	dc->n_buffers = 2;
+	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
+	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
+	dc->n_indices = mesh->nindices;
+	// free mesh
+
+	dc->n_textures = 1;
+	// TEXTURE0 is Y
+	dc->yidx = 0;
+
+	dc->draw = draw_elements;
+
+	glUseProgram(0);
+
+	return dc;
+}
+
+int main(int argc, char *argv[]) {
+	int i;
+	struct timespec a, b;
 	struct pint *pint = pint_initialise(WIDTH, HEIGHT);
 	check(pint);
-#if defined(USE_PI_CAMERA)
-	display = pint->get_egl_display(pint);
-#endif
 
 	signal(SIGINT, intHandler);
 
@@ -256,90 +245,40 @@ int main(int argc, char *argv[]) {
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
+	struct mesh *mesh;
+	mesh = get_mesh();
+	check(mesh);
+
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
-	ret = get_shader();
-	check(ret >= 0);
-	shader_program = ret;
+	struct feed *feed = feed_init(pint);
+	check(feed);
 
-	posLoc = glGetAttribLocation(shader_program, "position");
-	tcLoc = glGetAttribLocation(shader_program, "tc");
-	mvpLoc = glGetUniformLocation(shader_program, "mvp");
-	texLoc = glGetUniformLocation(shader_program, "tex");
-
-	tex = get_texture();
-	check(tex);
-
-	mesh = get_mesh();
-	check(mesh);
-	printf("Mesh:\n");
-	mesh_dump(mesh->mesh, MESHPOINTS, MESHPOINTS);
-	printf("Indices:\n");
-	mesh_indices_dump(mesh->indices, mesh->nindices);
-
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
-	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
-	glEnableVertexAttribArray(posLoc);
-	glEnableVertexAttribArray(tcLoc);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-#if defined(USE_PI_CAMERA)
-	camera = camera_init(WIDTH, HEIGHT, 60);
-	if (!camera) {
-		fprintf(stderr, "Camera init failed\n");
-		exit(1);
-	}
-#endif
+	struct drawcall *dcs[2];
+	dcs[0] = setup_draw(mat, mesh);
+	check(dcs[0]);
+	dcs[1] = setup_draw(mat2, mesh);
+	check(dcs[1]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
-#if defined(USE_PI_CAMERA)
-		buf = camera_dequeue_buffer(camera);
-		if (!buf) {
-			fprintf(stderr, "Failed to dequeue camera buffer!\n");
+		i = feed->dequeue(feed);
+		if (i != 0) {
+			fprintf(stderr, "Failed dequeueing\n");
 			break;
 		}
-		if(yimg != EGL_NO_IMAGE_KHR){
-			eglDestroyImageKHR(display, yimg);
-			yimg = EGL_NO_IMAGE_KHR;
-		}
-		yimg = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, buf->egl_buf, NULL);
-		glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex->handle);
-		glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, yimg);
-		/*
-		 * This seems to be needed, otherwise there's garbage for the
-		 * first few frames
-		 */
-		glFinish();
-#else
-		glBindTexture(GL_TEXTURE_2D, tex->handle);
-#endif
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		glUseProgram(shader_program);
-		glUniform1i(texLoc, 0);
-		glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
-		glActiveTexture(GL_TEXTURE0);
-		glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-		glDrawElements(GL_TRIANGLE_STRIP, mesh->nindices, GL_UNSIGNED_SHORT, 0);
 
-#if defined(USE_PI_CAMERA)
-		glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-#else
-		glBindTexture(GL_TEXTURE_2D, 0);
-#endif
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		for (i = 0; i < 2; i++) {
+			drawcall_draw(feed, dcs[i]);
+		}
 
 		pint->swap_buffers(pint);
-#if defined(USE_PI_CAMERA)
-		camera_queue_buffer(camera, buf);
-#endif
+
+		feed->queue(feed);
+
 		clock_gettime(CLOCK_MONOTONIC, &b);
 		if (a.tv_sec != b.tv_sec) {
 			long time = elapsed_nanos(a, b);
@@ -348,9 +287,7 @@ int main(int argc, char *argv[]) {
 		a = b;
 	}
 
-#if defined(USE_PI_CAMERA)
-	camera_exit(camera);
-#endif
+	feed->terminate(feed);
 	pint->terminate(pint);
 
 	return EXIT_SUCCESS;
