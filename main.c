@@ -135,50 +135,6 @@ GLint get_shader(void)
 	return shader_compile(vertex_shader_source, fragment_shader_source);
 }
 
-#if defined(USE_PI_CAMERA)
-struct texture *get_texture()
-{
-	struct texture *tex = calloc(1, sizeof(*tex));
-	if (!tex) {
-		fprintf(stderr, "Failed to get texture\n");
-		return NULL;
-	}
-
-	glGenTextures(1, &tex->handle);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex->handle);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-
-	return tex;
-}
-#else
-struct texture *get_texture(void)
-{
-	struct texture *tex = texture_load("texture.pnm");
-	if (!tex) {
-		fprintf(stderr, "Failed to get texture\n");
-		return NULL;
-	}
-
-	glGenTextures(1, &tex->handle);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex->handle);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	return tex;
-}
-#endif
-
 struct mesh {
 	GLfloat *mesh;
 	unsigned int nverts;
@@ -263,7 +219,7 @@ void draw_elements(struct drawcall *dc)
 
 GLint posLoc, tcLoc, mvpLoc, texLoc;
 
-struct drawcall *setup_draw(const GLfloat *mat, struct texture *tex, struct mesh *mesh)
+struct drawcall *setup_draw(const GLfloat *mat, GLuint tex, struct mesh *mesh)
 {
 	struct drawcall *dc = malloc(sizeof(*dc));
 	int ret;
@@ -299,9 +255,9 @@ struct drawcall *setup_draw(const GLfloat *mat, struct texture *tex, struct mesh
 
 	dc->n_textures = 1;
 #if defined(USE_PI_CAMERA)
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_EXTERNAL_OES, .handle = tex->handle };
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_EXTERNAL_OES, .handle = tex };
 #else
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex->handle };
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = tex };
 #endif
 	// free texture?
 
@@ -336,21 +292,150 @@ void do_draw(struct drawcall *dc)
 	glUseProgram(0);
 }
 
+struct feed {
+	GLuint ytex, utex, vtex;
+};
+
+#if defined(USE_PI_CAMERA)
+struct camera_feed {
+	struct feed base;
+
+	struct camera *camera;
+	struct camera_buffer *buf;
+	EGLDisplay display;
+	EGLImageKHR yimg, uimg, vimg;
+};
+
+struct feed *init_feed(struct pint *pint)
+{
+	struct camera_feed *feed = calloc(1, sizeof(*feed));
+	if (!feed)
+		return NULL;
+
+	feed->display = pint->get_egl_display(pint);
+	feed->camera = camera_init(WIDTH, HEIGHT, 60);
+	if (!feed->camera) {
+		fprintf(stderr, "Camera init failed\n");
+		exit(1);
+	}
+
+	glGenTextures(1, &feed->base.ytex);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+
+	return &feed->base;
+}
+
+void exit_feed(struct feed *f)
+{
+	struct camera_feed *feed = (struct camera_feed *)f;
+
+	if(feed->yimg != EGL_NO_IMAGE_KHR){
+		eglDestroyImageKHR(feed->display, feed->yimg);
+		feed->yimg = EGL_NO_IMAGE_KHR;
+	}
+	glDeleteTextures(1, &feed->base.ytex);
+
+	camera_exit(feed->camera);
+
+	free(feed);
+}
+
+int feed_dequeue(struct feed *f)
+{
+	struct camera_feed *feed = (struct camera_feed *)f;
+
+	feed->buf = camera_dequeue_buffer(feed->camera);
+	if (!feed->buf) {
+		fprintf(stderr, "Failed to dequeue camera buffer!\n");
+		return -1;
+	}
+	if(feed->yimg != EGL_NO_IMAGE_KHR){
+		eglDestroyImageKHR(feed->display, feed->yimg);
+		feed->yimg = EGL_NO_IMAGE_KHR;
+	}
+	feed->yimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->yimg);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+	/*
+	 * This seems to be needed, otherwise there's garbage for the
+	 * first few frames
+	 */
+	glFinish();
+
+	return 0;
+}
+
+void feed_queue(struct feed *f)
+{
+	struct camera_feed *feed = (struct camera_feed *)f;
+	camera_queue_buffer(feed->camera, feed->buf);
+	feed->buf = NULL;
+}
+#else
+struct feed *init_feed(struct pint *pint)
+{
+	struct texture *tex;
+	struct feed *feed = calloc(1, sizeof(*feed));
+	if (!feed)
+		return NULL;
+
+	pint = NULL;
+
+	tex = texture_load("texture.pnm");
+	if (!tex) {
+		fprintf(stderr, "Failed to get texture\n");
+		return NULL;
+	}
+
+	glGenTextures(1, &feed->ytex);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, feed->ytex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	free(tex->data);
+	free(tex);
+
+	return feed;
+}
+
+void exit_feed(struct feed *feed)
+{
+	glDeleteTextures(1, &feed->ytex);
+
+	free(feed);
+}
+
+int feed_dequeue(struct feed *f)
+{
+	f = NULL;
+	return 0;
+}
+
+void feed_queue(struct feed *f)
+{
+	f = NULL;
+	return;
+}
+#endif
+
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
-#if defined(USE_PI_CAMERA)
-	EGLDisplay display;
-	EGLImageKHR yimg = EGL_NO_IMAGE_KHR;
-	struct camera *camera;
-	struct camera_buffer *buf;
-#endif
-
 	struct pint *pint = pint_initialise(WIDTH, HEIGHT);
 	check(pint);
-#if defined(USE_PI_CAMERA)
-	display = pint->get_egl_display(pint);
-#endif
 
 	signal(SIGINT, intHandler);
 
@@ -366,52 +451,28 @@ int main(int argc, char *argv[]) {
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
 	struct mesh *mesh;
-	struct texture *tex;
 	mesh = get_mesh();
 	check(mesh);
-
-	tex = get_texture();
-	check(tex);
 
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
-#if defined(USE_PI_CAMERA)
-	camera = camera_init(WIDTH, HEIGHT, 60);
-	if (!camera) {
-		fprintf(stderr, "Camera init failed\n");
-		exit(1);
-	}
-#endif
+	struct feed *feed = init_feed(pint);
+	check(feed);
 
 	struct drawcall *dcs[2];
-	dcs[0] = setup_draw(mat, tex, mesh);
+	dcs[0] = setup_draw(mat, feed->ytex, mesh);
 	check(dcs[0]);
-	dcs[1] = setup_draw(mat2, tex, mesh);
+	dcs[1] = setup_draw(mat2, feed->ytex, mesh);
 	check(dcs[1]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
-#if defined(USE_PI_CAMERA)
-		buf = camera_dequeue_buffer(camera);
-		if (!buf) {
-			fprintf(stderr, "Failed to dequeue camera buffer!\n");
+		i = feed_dequeue(feed);
+		if (i != 0) {
+			fprintf(stderr, "Failed dequeueing\n");
 			break;
 		}
-		if(yimg != EGL_NO_IMAGE_KHR){
-			eglDestroyImageKHR(display, yimg);
-			yimg = EGL_NO_IMAGE_KHR;
-		}
-		yimg = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, buf->egl_buf, NULL);
-		glBindTexture(GL_TEXTURE_EXTERNAL_OES, tex->handle);
-		glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, yimg);
-		glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-		/*
-		 * This seems to be needed, otherwise there's garbage for the
-		 * first few frames
-		 */
-		glFinish();
-#endif
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -420,9 +481,9 @@ int main(int argc, char *argv[]) {
 		}
 
 		pint->swap_buffers(pint);
-#if defined(USE_PI_CAMERA)
-		camera_queue_buffer(camera, buf);
-#endif
+
+		feed_queue(feed);
+
 		clock_gettime(CLOCK_MONOTONIC, &b);
 		if (a.tv_sec != b.tv_sec) {
 			long time = elapsed_nanos(a, b);
@@ -431,9 +492,7 @@ int main(int argc, char *argv[]) {
 		a = b;
 	}
 
-#if defined(USE_PI_CAMERA)
-	camera_exit(camera);
-#endif
+	exit_feed(feed);
 	pint->terminate(pint);
 
 	return EXIT_SUCCESS;
