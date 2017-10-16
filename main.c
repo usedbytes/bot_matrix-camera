@@ -22,6 +22,7 @@
 #include "shader.h"
 #include "texture.h"
 #include "mesh.h"
+#include "feed.h"
 
 #include "EGL/egl.h"
 
@@ -292,145 +293,6 @@ void do_draw(struct drawcall *dc)
 	glUseProgram(0);
 }
 
-struct feed {
-	GLuint ytex, utex, vtex;
-};
-
-#if defined(USE_PI_CAMERA)
-struct camera_feed {
-	struct feed base;
-
-	struct camera *camera;
-	struct camera_buffer *buf;
-	EGLDisplay display;
-	EGLImageKHR yimg, uimg, vimg;
-};
-
-struct feed *init_feed(struct pint *pint)
-{
-	struct camera_feed *feed = calloc(1, sizeof(*feed));
-	if (!feed)
-		return NULL;
-
-	feed->display = pint->get_egl_display(pint);
-	feed->camera = camera_init(WIDTH, HEIGHT, 60);
-	if (!feed->camera) {
-		fprintf(stderr, "Camera init failed\n");
-		exit(1);
-	}
-
-	glGenTextures(1, &feed->base.ytex);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-
-	return &feed->base;
-}
-
-void exit_feed(struct feed *f)
-{
-	struct camera_feed *feed = (struct camera_feed *)f;
-
-	if(feed->yimg != EGL_NO_IMAGE_KHR){
-		eglDestroyImageKHR(feed->display, feed->yimg);
-		feed->yimg = EGL_NO_IMAGE_KHR;
-	}
-	glDeleteTextures(1, &feed->base.ytex);
-
-	camera_exit(feed->camera);
-
-	free(feed);
-}
-
-int feed_dequeue(struct feed *f)
-{
-	struct camera_feed *feed = (struct camera_feed *)f;
-
-	feed->buf = camera_dequeue_buffer(feed->camera);
-	if (!feed->buf) {
-		fprintf(stderr, "Failed to dequeue camera buffer!\n");
-		return -1;
-	}
-	if(feed->yimg != EGL_NO_IMAGE_KHR){
-		eglDestroyImageKHR(feed->display, feed->yimg);
-		feed->yimg = EGL_NO_IMAGE_KHR;
-	}
-	feed->yimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex);
-	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->yimg);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-	/*
-	 * This seems to be needed, otherwise there's garbage for the
-	 * first few frames
-	 */
-	glFinish();
-
-	return 0;
-}
-
-void feed_queue(struct feed *f)
-{
-	struct camera_feed *feed = (struct camera_feed *)f;
-	camera_queue_buffer(feed->camera, feed->buf);
-	feed->buf = NULL;
-}
-#else
-struct feed *init_feed(struct pint *pint)
-{
-	struct texture *tex;
-	struct feed *feed = calloc(1, sizeof(*feed));
-	if (!feed)
-		return NULL;
-
-	pint = NULL;
-
-	tex = texture_load("texture.pnm");
-	if (!tex) {
-		fprintf(stderr, "Failed to get texture\n");
-		return NULL;
-	}
-
-	glGenTextures(1, &feed->ytex);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, feed->ytex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	free(tex->data);
-	free(tex);
-
-	return feed;
-}
-
-void exit_feed(struct feed *feed)
-{
-	glDeleteTextures(1, &feed->ytex);
-
-	free(feed);
-}
-
-int feed_dequeue(struct feed *f)
-{
-	f = NULL;
-	return 0;
-}
-
-void feed_queue(struct feed *f)
-{
-	f = NULL;
-	return;
-}
-#endif
-
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
@@ -457,7 +319,7 @@ int main(int argc, char *argv[]) {
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 
-	struct feed *feed = init_feed(pint);
+	struct feed *feed = feed_init(pint);
 	check(feed);
 
 	struct drawcall *dcs[2];
@@ -468,7 +330,7 @@ int main(int argc, char *argv[]) {
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
-		i = feed_dequeue(feed);
+		i = feed->dequeue(feed);
 		if (i != 0) {
 			fprintf(stderr, "Failed dequeueing\n");
 			break;
@@ -482,7 +344,7 @@ int main(int argc, char *argv[]) {
 
 		pint->swap_buffers(pint);
 
-		feed_queue(feed);
+		feed->queue(feed);
 
 		clock_gettime(CLOCK_MONOTONIC, &b);
 		if (a.tv_sec != b.tv_sec) {
@@ -492,7 +354,7 @@ int main(int argc, char *argv[]) {
 		a = b;
 	}
 
-	exit_feed(feed);
+	feed->terminate(feed);
 	pint->terminate(pint);
 
 	return EXIT_SUCCESS;
