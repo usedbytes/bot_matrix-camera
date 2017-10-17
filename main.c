@@ -47,8 +47,8 @@ void intHandler(int dummy) {
  * scales/translates everything so that on-screen points are 0-1
  */
 static const GLfloat mat[] = {
-	2.0f,  0.0f,  0.0f, -1.0f,
-	0.0f, -2.0f,  0.0f,  1.0f,
+	2.0f,  0.0f,  0.0f,  -1.0f,
+	0.0f,  2.0f,  0.0f,  -1.0f,
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
@@ -208,10 +208,71 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 	return nanos + (1000000000 * sec);
 }
 
-GLint posLoc, tcLoc, mvpLoc, texLoc;
-
-struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, const char *fs_fname)
+struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 {
+	GLint posLoc, tcLoc, mvpLoc, texLoc;
+	struct drawcall *dc = calloc(1, sizeof(*dc));
+	int ret;
+	dc->yidx = dc->uidx = dc->vidx = -1;
+
+	const GLfloat quad[] = {
+		0.0f,  0.0f,
+		0.0f,  1.0f,
+		1.0f,  0.0f,
+		1.0f,  1.0f,
+	};
+	const GLshort idx[] = {
+		0, 1, 2, 3,
+	};
+
+	GLuint vertices, indices;
+
+	ret = get_shader("vertex_shader.glsl", "quad_fs.glsl");
+	check(ret >= 0);
+	dc->shader_program = ret;
+
+	glUseProgram(dc->shader_program);
+
+	posLoc = glGetAttribLocation(dc->shader_program, "position");
+	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
+	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
+
+	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
+	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
+	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
+	glEnableVertexAttribArray(posLoc);
+	glEnableVertexAttribArray(tcLoc);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	texLoc = glGetUniformLocation(dc->shader_program, "tex");
+	glUniform1i(texLoc, 0);
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+
+	dc->n_buffers = 2;
+	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
+	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
+	dc->n_indices = mesh->nindices;
+
+	dc->n_textures = 1;
+	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = fbo->texture };
+
+	dc->viewport.x = 0;
+	dc->viewport.y = 0;
+	dc->viewport.w = WIDTH;
+	dc->viewport.h = HEIGHT;
+
+	dc->draw = draw_elements;
+
+	glUseProgram(0);
+
+	return dc;
+}
+
+struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, const char *fs_fname, struct fbo *fbo)
+{
+	GLint posLoc, tcLoc, mvpLoc, texLoc;
 	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
 
@@ -255,6 +316,38 @@ struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, c
 	dc->uidx = 1;
 	dc->vidx = 2;
 
+	dc->viewport.x = 0;
+	dc->viewport.y = 0;
+	dc->viewport.w = WIDTH;
+	dc->viewport.h = HEIGHT;
+
+	if (fbo) {
+		dc->fbo = *fbo;
+		fbo = &dc->fbo;
+
+		if (!fbo->handle) {
+			glGenFramebuffers(1, &fbo->handle);
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo->handle);
+
+		if (!fbo->texture) {
+			glGenTextures(1, &fbo->texture);
+		}
+
+		glBindTexture(GL_TEXTURE_2D, fbo->texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbo->width, fbo->height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo->texture, 0);
+
+		if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+			fprintf(stderr, "Framebuffer not complete\n");
+			return NULL;
+		}
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
 	dc->draw = draw_elements;
 
 	glUseProgram(0);
@@ -290,15 +383,21 @@ int main(int argc, char *argv[]) {
 	struct feed *feed = feed_init(pint);
 	check(feed);
 
-	struct drawcall *dcs[4];
-	dcs[0] = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl");
+	struct fbo fbo = {
+		.width = 32,
+		.height = 32,
+	};
+	struct drawcall *dcs[5];
+	dcs[0] = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl", NULL);
 	check(dcs[0]);
-	dcs[1] = get_camera_drawcall(umat, "vertex_shader.glsl", "u_shader.glsl");
+	dcs[1] = get_camera_drawcall(umat, "vertex_shader.glsl", "u_shader.glsl", NULL);
 	check(dcs[1]);
-	dcs[2] = get_camera_drawcall(vmat, "vertex_shader.glsl", "v_shader.glsl");
+	dcs[2] = get_camera_drawcall(vmat, "vertex_shader.glsl", "v_shader.glsl", NULL);
 	check(dcs[2]);
-	dcs[3] = get_camera_drawcall(rgbmat, "vertex_shader.glsl", FRAGMENT_SHADER);
+	dcs[3] = get_camera_drawcall(mat, "vertex_shader.glsl", FRAGMENT_SHADER, &fbo);
 	check(dcs[3]);
+	dcs[4] = draw_fbo_drawcall(rgbmat, &dcs[3]->fbo);
+	check(dcs[4]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -310,7 +409,7 @@ int main(int argc, char *argv[]) {
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < 5; i++) {
 			drawcall_draw(feed, dcs[i]);
 		}
 

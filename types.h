@@ -22,4 +22,14 @@ struct uniform {
 	GLuint handle;
 };
 
+struct fbo {
+	unsigned int width, height;
+	GLuint handle;
+	GLuint texture;
+};
+
+struct viewport {
+	unsigned int x, y, w, h;
+};
+
 #endif /* __TYPES_H__ */

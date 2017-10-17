@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 #include <GLES2/gl2.h>
+#include <GLES/gl.h>
 
 #include "feed.h"
 #include "drawcall.h"
@@ -17,12 +18,20 @@ void draw_elements(struct drawcall *dc)
 
 void drawcall_draw(struct feed *feed, struct drawcall *dc)
 {
+	GLint vp[4];
 	int i;
 	glUseProgram(dc->shader_program);
 
 	dc->textures[dc->yidx] = feed->ytex;
 	dc->textures[dc->uidx] = feed->utex;
 	dc->textures[dc->vidx] = feed->vtex;
+
+	if (dc->fbo.handle) {
+		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo.handle);
+		glViewport(0, 0, dc->fbo.width, dc->fbo.height);
+	} else {
+		glViewport(dc->viewport.x, dc->viewport.y, dc->viewport.w, dc->viewport.h);
+	}
 
 	for (i = 0; i < dc->n_textures; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
@@ -47,4 +56,8 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	dc->textures[dc->vidx] = (struct bind){ 0, 0 };
 
 	glUseProgram(0);
+
+	if (dc->fbo.handle) {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
 }

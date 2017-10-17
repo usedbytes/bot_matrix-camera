@@ -23,6 +23,9 @@ struct drawcall {
 	struct bind uniforms[10];
 	unsigned int n_indices;
 
+	struct fbo fbo;
+	struct viewport viewport;
+
 	void (*draw)(struct drawcall *);
 };
 
