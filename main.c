@@ -195,7 +195,6 @@ struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
 	posLoc = glGetAttribLocation(dc->shader_program, "position");
 	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
 	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
-	texLoc = glGetUniformLocation(dc->shader_program, "tex");
 
 	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
@@ -206,7 +205,12 @@ struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+	texLoc = glGetUniformLocation(dc->shader_program, "ytex");
 	glUniform1i(texLoc, 0);
+	texLoc = glGetUniformLocation(dc->shader_program, "utex");
+	glUniform1i(texLoc, 1);
+	texLoc = glGetUniformLocation(dc->shader_program, "vtex");
+	glUniform1i(texLoc, 2);
 	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
 
 	dc->n_buffers = 2;
@@ -215,9 +219,11 @@ struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
 	dc->n_indices = mesh->nindices;
 	// free mesh
 
-	dc->n_textures = 1;
-	// TEXTURE0 is Y
+	dc->n_textures = 3;
+	// TEXTURE0,1,2 is Y,U,V
 	dc->yidx = 0;
+	dc->uidx = 1;
+	dc->vidx = 2;
 
 	dc->draw = draw_elements;
 

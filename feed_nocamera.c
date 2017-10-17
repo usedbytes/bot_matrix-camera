@@ -38,7 +38,7 @@ struct feed *feed_init(struct pint *pint)
 
 	pint = NULL;
 
-	tex = texture_load("texture.pnm");
+	tex = texture_load("luma.pgm");
 	if (!tex) {
 		fprintf(stderr, "Failed to get texture\n");
 		return NULL;
@@ -52,7 +52,47 @@ struct feed *feed_init(struct pint *pint)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex->width, tex->height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex->data);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, tex->width, tex->height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, tex->data);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	free(tex->data);
+	free(tex);
+
+	tex = texture_load("cb.pgm");
+	if (!tex) {
+		fprintf(stderr, "Failed to get texture\n");
+		return NULL;
+	}
+
+	feed->utex.bind = GL_TEXTURE_2D;
+	glGenTextures(1, &feed->utex.handle);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, feed->utex.handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, tex->width, tex->height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, tex->data);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	free(tex->data);
+	free(tex);
+
+	tex = texture_load("cr.pgm");
+	if (!tex) {
+		fprintf(stderr, "Failed to get texture\n");
+		return NULL;
+	}
+
+	feed->vtex.bind = GL_TEXTURE_2D;
+	glGenTextures(1, &feed->vtex.handle);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, feed->vtex.handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, tex->width, tex->height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, tex->data);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	free(tex->data);

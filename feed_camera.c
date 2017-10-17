@@ -55,8 +55,39 @@ static int dequeue(struct feed *f)
 		feed->yimg = EGL_NO_IMAGE_KHR;
 	}
 	feed->yimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	if (feed->yimg == EGL_NO_IMAGE_KHR) {
+		fprintf(stderr, "Failed to get yimg!\n");
+		return -1;
+	}
 	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex.handle);
 	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->yimg);
+
+	if(feed->uimg != EGL_NO_IMAGE_KHR){
+		eglDestroyImageKHR(feed->display, feed->uimg);
+		feed->uimg = EGL_NO_IMAGE_KHR;
+	}
+	glFinish();
+
+	feed->uimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	if (feed->uimg == EGL_NO_IMAGE_KHR) {
+		fprintf(stderr, "Failed to get uimg!\n");
+		return -1;
+	}
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.utex.handle);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->uimg);
+
+	if(feed->vimg != EGL_NO_IMAGE_KHR){
+		eglDestroyImageKHR(feed->display, feed->vimg);
+		feed->vimg = EGL_NO_IMAGE_KHR;
+	}
+	feed->vimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	if (feed->vimg == EGL_NO_IMAGE_KHR) {
+		fprintf(stderr, "Failed to get vimg!\n");
+		return -1;
+	}
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.vtex.handle);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, feed->vimg);
+
 	glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 	/*
 	 * This seems to be needed, otherwise there's garbage for the
@@ -91,6 +122,24 @@ struct feed *feed_init(struct pint *pint)
 	glGenTextures(1, &feed->base.ytex.handle);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.ytex.handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	feed->base.utex.bind = GL_TEXTURE_EXTERNAL_OES;
+	glGenTextures(1, &feed->base.utex.handle);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.utex.handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	feed->base.vtex.bind = GL_TEXTURE_EXTERNAL_OES;
+	glGenTextures(1, &feed->base.vtex.handle);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_EXTERNAL_OES, feed->base.vtex.handle);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
