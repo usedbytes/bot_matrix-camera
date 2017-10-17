@@ -41,6 +41,7 @@ struct texture *texture_load(const char *file)
 
 	tex->width = inpam.width;
 	tex->height = inpam.height;
+	tex->ncmp = inpam.depth;
 
 	pitch = ALIGN_UP(inpam.width * inpam.depth, 4);
 	tex->datalen = pitch * inpam.height;

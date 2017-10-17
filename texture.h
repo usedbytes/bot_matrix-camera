@@ -11,6 +11,7 @@
 
 struct texture {
 	uint32_t width, height;
+	unsigned int ncmp;
 	size_t datalen;
 
 	char *data;
