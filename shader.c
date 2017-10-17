@@ -53,6 +53,7 @@ char *shader_load(const char *filename)
 		fclose(fp);
 		return NULL;
 	}
+	shader[len-1] = '\0';
 
 	fclose(fp);
 	return shader;
