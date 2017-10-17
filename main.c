@@ -35,6 +35,8 @@
 
 volatile bool should_exit = 0;
 
+struct mesh *mesh;
+
 void intHandler(int dummy) {
 	printf("Caught signal.\n");
 	should_exit = 1;
@@ -57,6 +59,35 @@ static const GLfloat mat2[] = {
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
+
+static const GLfloat ymat[] = {
+	1.0f,  0.0f,  0.0f, -1.0f,
+	0.0f, -1.0f,  0.0f,  1.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
+static const GLfloat umat[] = {
+	1.0f,  0.0f,  0.0f,  0.0f,
+	0.0f, -1.0f,  0.0f,  1.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
+static const GLfloat vmat[] = {
+	1.0f,  0.0f,  0.0f, -1.0f,
+	0.0f, -1.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
+static const GLfloat rgbmat[] = {
+	1.0f,  0.0f,  0.0f,  0.0f,
+	0.0f, -1.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
 
 float coeffs[] = { 0, 0, 0, 1.0 };
 
@@ -105,18 +136,18 @@ void brown(float xcoord, float ycoord, float *xout, float *yout)
 	*/
 }
 
-GLint get_shader(void)
+GLint get_shader(const char *vs_fname, const char *fs_fname)
 {
 	char *vertex_shader_source, *fragment_shader_source;
 
-	vertex_shader_source = shader_load("vertex_shader.glsl");
+	vertex_shader_source = shader_load(vs_fname);
 	if (!vertex_shader_source) {
 		return -1;
 	}
 	printf("Vertex shader:\n");
 	printf("%s\n", vertex_shader_source);
 
-	fragment_shader_source = shader_load(FRAGMENT_SHADER);
+	fragment_shader_source = shader_load(fs_fname);
 	if (!fragment_shader_source) {
 		return -1;
 	}
@@ -179,14 +210,14 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 
 GLint posLoc, tcLoc, mvpLoc, texLoc;
 
-struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
+struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, const char *fs_fname)
 {
 	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
 
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
-	ret = get_shader();
+	ret = get_shader(vs_fname, fs_fname);
 	check(ret >= 0);
 	dc->shader_program = ret;
 
@@ -211,13 +242,12 @@ struct drawcall *setup_draw(const GLfloat *mat, struct mesh *mesh)
 	glUniform1i(texLoc, 1);
 	texLoc = glGetUniformLocation(dc->shader_program, "vtex");
 	glUniform1i(texLoc, 2);
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mat);
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
 
 	dc->n_buffers = 2;
 	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
 	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
 	dc->n_indices = mesh->nindices;
-	// free mesh
 
 	dc->n_textures = 3;
 	// TEXTURE0,1,2 is Y,U,V
@@ -248,12 +278,11 @@ int main(int argc, char *argv[]) {
 	}
 	pm_init(argv[0], 0);
 
-	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
-	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
-
-	struct mesh *mesh;
 	mesh = get_mesh();
 	check(mesh);
+
+	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
+	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
@@ -261,11 +290,15 @@ int main(int argc, char *argv[]) {
 	struct feed *feed = feed_init(pint);
 	check(feed);
 
-	struct drawcall *dcs[2];
-	dcs[0] = setup_draw(mat, mesh);
+	struct drawcall *dcs[4];
+	dcs[0] = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl");
 	check(dcs[0]);
-	dcs[1] = setup_draw(mat2, mesh);
+	dcs[1] = get_camera_drawcall(umat, "vertex_shader.glsl", "u_shader.glsl");
 	check(dcs[1]);
+	dcs[2] = get_camera_drawcall(vmat, "vertex_shader.glsl", "v_shader.glsl");
+	check(dcs[2]);
+	dcs[3] = get_camera_drawcall(rgbmat, "vertex_shader.glsl", FRAGMENT_SHADER);
+	check(dcs[3]);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -277,7 +310,7 @@ int main(int argc, char *argv[]) {
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		for (i = 0; i < 2; i++) {
+		for (i = 0; i < 4; i++) {
 			drawcall_draw(feed, dcs[i]);
 		}
 
