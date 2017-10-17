@@ -75,6 +75,7 @@ GLint shader_compile(const char *vertex_shader_source, const char *fragment_shad
 	if (!success) {
 		glGetShaderInfoLog(vertex_shader, INFOLOG_LEN, NULL, infoLog);
 		fprintf(stderr, "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n%s\n", infoLog);
+		return -1;
 	}
 
 	/* Fragment shader */
@@ -85,6 +86,7 @@ GLint shader_compile(const char *vertex_shader_source, const char *fragment_shad
 	if (!success) {
 		glGetShaderInfoLog(fragment_shader, INFOLOG_LEN, NULL, infoLog);
 		fprintf(stderr, "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n%s\n", infoLog);
+		return -1;
 	}
 
 	/* Link shaders */
@@ -96,6 +98,7 @@ GLint shader_compile(const char *vertex_shader_source, const char *fragment_shad
 	if (!success) {
 		glGetProgramInfoLog(shader_program, INFOLOG_LEN, NULL, infoLog);
 		fprintf(stderr, "ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+		return -1;
 	}
 
 	glDeleteShader(vertex_shader);
