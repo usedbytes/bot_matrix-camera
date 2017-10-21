@@ -82,20 +82,19 @@ static const GLfloat vmat[] = {
 };
 
 static const GLfloat rgbmat[] = {
-	1.0f,  0.0f,  0.0f,  0.0f,
-	0.0f, -1.0f,  0.0f,  0.0f,
+	-1.0f,  0.0f,  0.0f, 1.0f,
+	0.0f,  1.0f,  0.0f,  -1.0f,
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
 
 
-float coeffs[] = { 0, 0, 0, 1.0 };
+float K[] = { 0, 0, 0, 1.0 };
 
 void brown(float xcoord, float ycoord, float *xout, float *yout)
 {
 	double asp = (double)(WIDTH) / (double)(HEIGHT);
 	double xoffs = ((double)(WIDTH - HEIGHT) / 2.0f) / (double)HEIGHT;
-	float *K = coeffs;
 	//double xdiff = (xcoord * 2) - 1;
 	double xdiff = (((xcoord * asp) - xoffs) * 2) - 1;
 	double ydiff = (ycoord * 2) - 1;
@@ -114,7 +113,6 @@ void brown(float xcoord, float ycoord, float *xout, float *yout)
 		yunit = 0;
 	}
 
-	K[3] = K[3] - (K[0] + K[1] + K[2]);
 
 	// Same algorithm used by ImageMagick.
 	// Defined by Professor Helmut Dersch:
@@ -364,10 +362,12 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, intHandler);
 
 	if (argc == 5) {
-		sscanf(argv[1], "%f", &coeffs[0]);
-		sscanf(argv[2], "%f", &coeffs[1]);
-		sscanf(argv[3], "%f", &coeffs[2]);
-		sscanf(argv[4], "%f", &coeffs[3]);
+		sscanf(argv[1], "%f", &K[0]);
+		sscanf(argv[2], "%f", &K[1]);
+		sscanf(argv[3], "%f", &K[2]);
+		sscanf(argv[4], "%f", &K[3]);
+
+		K[3] = K[3] - (K[0] + K[1] + K[2]);
 	}
 	pm_init(argv[0], 0);
 
