@@ -214,16 +214,26 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
 	const GLfloat quad[] = {
-		0.0f,  0.0f,
-		0.0f,  1.0f,
-		1.0f,  0.0f,
-		1.0f,  1.0f,
+		0.2f,  0.2f, 0.0f,  0.0f,
+		1.0f,  0.0f, 1.0f,  0.0f,
+		0.0f,  1.0f, 0.0f,  1.0f,
+		0.8f,  0.8f, 1.0f,  1.0f,
 	};
 	const GLshort idx[] = {
-		0, 1, 2, 3,
+		0, 2, 1, 3,
 	};
 
 	GLuint vertices, indices;
+
+	glGenBuffers(1, &vertices);
+	glBindBuffer(GL_ARRAY_BUFFER, vertices);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glGenBuffers(1, &indices);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 	ret = get_shader("vertex_shader.glsl", "quad_fs.glsl");
 	check(ret >= 0);
@@ -235,22 +245,27 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
 	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
 
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
-	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
-	glEnableVertexAttribArray(posLoc);
-	glEnableVertexAttribArray(tcLoc);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	dc->n_attributes = 2;
+	dc->attributes[0] = (struct attr){
+		.loc = posLoc,
+		.size = 2,
+		.stride = sizeof(quad[0]) * 4,
+		.ptr = (GLvoid *)0,
+	};
+	dc->attributes[1] = (struct attr){
+		.loc = tcLoc,
+		.size = 2,
+		.stride = sizeof(quad[0]) * 4,
+		.ptr = (GLvoid *)(sizeof(quad[0]) * 2),
+	};
 
 	texLoc = glGetUniformLocation(dc->shader_program, "tex");
 	glUniform1i(texLoc, 0);
 	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
 
 	dc->n_buffers = 2;
-	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
-	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
+	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = vertices };
+	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = indices };
 	dc->n_indices = mesh->nindices;
 
 	dc->n_textures = 1;
@@ -286,14 +301,19 @@ struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, c
 	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
 	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
 
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-	glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)0);
-	glVertexAttribPointer(tcLoc, 2, GL_FLOAT, GL_FALSE, sizeof(mesh->mesh[0]) * 4, (GLvoid*)(sizeof(mesh->mesh[0]) * 2));
-	glEnableVertexAttribArray(posLoc);
-	glEnableVertexAttribArray(tcLoc);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	dc->n_attributes = 2;
+	dc->attributes[0] = (struct attr){
+		.loc = posLoc,
+		.size = 2,
+		.stride = sizeof(mesh->mesh[0]) * 4,
+		.ptr = (GLvoid *)0,
+	};
+	dc->attributes[1] = (struct attr){
+		.loc = tcLoc,
+		.size = 2,
+		.stride = sizeof(mesh->mesh[0]) * 4,
+		.ptr = (GLvoid *)(sizeof(mesh->mesh[0]) * 2),
+	};
 
 	texLoc = glGetUniformLocation(dc->shader_program, "ytex");
 	glUniform1i(texLoc, 0);
