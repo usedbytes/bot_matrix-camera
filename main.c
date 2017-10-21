@@ -266,7 +266,7 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	dc->n_buffers = 2;
 	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = vertices };
 	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = indices };
-	dc->n_indices = mesh->nindices;
+	dc->n_indices = sizeof(idx) / sizeof(idx[0]);
 
 	dc->n_textures = 1;
 	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = fbo->texture };
