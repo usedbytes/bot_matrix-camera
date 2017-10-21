@@ -18,7 +18,6 @@ void draw_elements(struct drawcall *dc)
 
 void drawcall_draw(struct feed *feed, struct drawcall *dc)
 {
-	GLint vp[4];
 	int i;
 	glUseProgram(dc->shader_program);
 
@@ -64,9 +63,9 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	dc->textures[dc->uidx] = (struct bind){ 0, 0 };
 	dc->textures[dc->vidx] = (struct bind){ 0, 0 };
 
-	glUseProgram(0);
-
 	if (dc->fbo.handle) {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
+
+	glUseProgram(0);
 }
