@@ -40,9 +40,18 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	for (i = 0; i < dc->n_buffers; i++) {
 		glBindBuffer(dc->buffers[i].bind, dc->buffers[i].handle);
 	}
+	for (i = 0; i < dc->n_attributes; i++) {
+		struct attr *attr = &dc->attributes[i];
+		glVertexAttribPointer(attr->loc, attr->size, GL_FLOAT, GL_FALSE, attr->stride, attr->ptr);
+		glEnableVertexAttribArray(attr->loc);
+	}
 
 	dc->draw(dc);
 
+	for (i = 0; i < dc->n_attributes; i++) {
+		struct attr *attr = &dc->attributes[i];
+		glDisableVertexAttribArray(attr->loc);
+	}
 	for (i = 0; i < dc->n_buffers; i++) {
 		glBindBuffer(dc->buffers[i].bind, 0);
 	}

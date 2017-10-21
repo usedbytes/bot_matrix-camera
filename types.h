@@ -32,4 +32,11 @@ struct viewport {
 	unsigned int x, y, w, h;
 };
 
+struct attr {
+	GLuint loc;
+	GLint size;
+	GLsizei stride;
+	GLvoid *ptr;
+};
+
 #endif /* __TYPES_H__ */
