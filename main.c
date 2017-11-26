@@ -21,6 +21,7 @@
 #include "pint.h"
 #include "shader.h"
 #include "texture.h"
+#include "list.h"
 #include "mesh.h"
 #include "feed.h"
 #include "drawcall.h"
@@ -407,17 +408,29 @@ int main(int argc, char *argv[]) {
 		.width = 32,
 		.height = 32,
 	};
-	struct drawcall *dcs[5];
-	dcs[0] = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl", NULL);
-	check(dcs[0]);
-	dcs[1] = get_camera_drawcall(umat, "vertex_shader.glsl", "u_shader.glsl", NULL);
-	check(dcs[1]);
-	dcs[2] = get_camera_drawcall(vmat, "vertex_shader.glsl", "v_shader.glsl", NULL);
-	check(dcs[2]);
-	dcs[3] = get_camera_drawcall(mat, "vertex_shader.glsl", FRAGMENT_SHADER, &fbo);
-	check(dcs[3]);
-	dcs[4] = draw_fbo_drawcall(rgbmat, &dcs[3]->fbo);
-	check(dcs[4]);
+	struct drawcall *dc;
+	struct list_head drawcalls;
+	list_init(&drawcalls);
+
+	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl", NULL);
+	check(dc);
+	list_add_end(&drawcalls, &dc->list);
+
+	dc = get_camera_drawcall(umat, "vertex_shader.glsl", "u_shader.glsl", NULL);
+	check(dc);
+	list_add_end(&drawcalls, &dc->list);
+
+	dc = get_camera_drawcall(vmat, "vertex_shader.glsl", "v_shader.glsl", NULL);
+	check(dc);
+	list_add_end(&drawcalls, &dc->list);
+
+	dc = get_camera_drawcall(mat, "vertex_shader.glsl", FRAGMENT_SHADER, &fbo);
+	check(dc);
+	list_add_end(&drawcalls, &dc->list);
+
+	dc = draw_fbo_drawcall(rgbmat, &dc->fbo);
+	check(dc);
+	list_add_end(&drawcalls, &dc->list);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -429,8 +442,12 @@ int main(int argc, char *argv[]) {
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		for (i = 0; i < 5; i++) {
-			drawcall_draw(feed, dcs[i]);
+		struct list_head *l = drawcalls.next;
+		while (l != &drawcalls) {
+			dc = (struct drawcall *)l;
+			drawcall_draw(feed, dc);
+
+			l = l->next;
 		}
 
 		pint->swap_buffers(pint);

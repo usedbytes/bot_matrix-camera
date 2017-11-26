@@ -10,9 +10,12 @@
 #include <GLES2/gl2.h>
 
 #include "types.h"
+#include "list.h"
 #include "feed.h"
 
 struct drawcall {
+	struct list_head list;
+
 	GLuint shader_program;
 	unsigned int n_buffers, n_textures, n_uniforms, n_attributes;
 	int yidx, uidx, vidx;
