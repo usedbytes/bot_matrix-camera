@@ -284,6 +284,46 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	return dc;
 }
 
+static struct fbo *create_fbo(uint32_t width, uint32_t height, GLuint texture)
+{
+	struct fbo *fbo = malloc(sizeof(*fbo));
+	if (!fbo) {
+		return NULL;
+	}
+
+	glGenFramebuffers(1, &fbo->handle);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo->handle);
+
+	if (!texture) {
+		glGenTextures(1, &fbo->texture);
+	}
+	glBindTexture(GL_TEXTURE_2D, fbo->texture);
+
+	fbo->width = width;
+	fbo->height = height;
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbo->width, fbo->height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo->texture, 0);
+
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		fprintf(stderr, "Framebuffer not complete\n");
+		goto fail;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return fbo;
+
+fail:
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (!texture)
+		glDeleteTextures(1, &fbo->texture);
+	glDeleteFramebuffers(1, &fbo->handle);
+	free(fbo);
+	return NULL;
+}
+
 struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, const char *fs_fname, struct fbo *fbo)
 {
 	GLint posLoc, tcLoc, mvpLoc, texLoc;
@@ -340,33 +380,7 @@ struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, c
 	dc->viewport.w = WIDTH;
 	dc->viewport.h = HEIGHT;
 
-	if (fbo) {
-		dc->fbo = *fbo;
-		fbo = &dc->fbo;
-
-		if (!fbo->handle) {
-			glGenFramebuffers(1, &fbo->handle);
-		}
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo->handle);
-
-		if (!fbo->texture) {
-			glGenTextures(1, &fbo->texture);
-		}
-
-		glBindTexture(GL_TEXTURE_2D, fbo->texture);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbo->width, fbo->height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo->texture, 0);
-
-		if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-			fprintf(stderr, "Framebuffer not complete\n");
-			return NULL;
-		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
-
+	dc->fbo = fbo;
 	dc->draw = draw_elements;
 
 	glUseProgram(0);
@@ -404,10 +418,7 @@ int main(int argc, char *argv[]) {
 	struct feed *feed = feed_init(pint);
 	check(feed);
 
-	struct fbo fbo = {
-		.width = 32,
-		.height = 32,
-	};
+	struct fbo *fbo = create_fbo(32, 32, 0);
 	struct drawcall *dc;
 	struct list_head drawcalls;
 	list_init(&drawcalls);
@@ -424,11 +435,11 @@ int main(int argc, char *argv[]) {
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 
-	dc = get_camera_drawcall(mat, "vertex_shader.glsl", FRAGMENT_SHADER, &fbo);
+	dc = get_camera_drawcall(mat, "vertex_shader.glsl", FRAGMENT_SHADER, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 
-	dc = draw_fbo_drawcall(rgbmat, &dc->fbo);
+	dc = draw_fbo_drawcall(rgbmat, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 

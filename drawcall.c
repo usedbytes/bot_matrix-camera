@@ -25,9 +25,9 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	dc->textures[dc->uidx] = feed->utex;
 	dc->textures[dc->vidx] = feed->vtex;
 
-	if (dc->fbo.handle) {
-		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo.handle);
-		glViewport(0, 0, dc->fbo.width, dc->fbo.height);
+	if (dc->fbo) {
+		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo->handle);
+		glViewport(0, 0, dc->fbo->width, dc->fbo->height);
 	} else {
 		glViewport(dc->viewport.x, dc->viewport.y, dc->viewport.w, dc->viewport.h);
 	}
@@ -63,7 +63,7 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	dc->textures[dc->uidx] = (struct bind){ 0, 0 };
 	dc->textures[dc->vidx] = (struct bind){ 0, 0 };
 
-	if (dc->fbo.handle) {
+	if (dc->fbo) {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 

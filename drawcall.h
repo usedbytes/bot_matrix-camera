@@ -20,6 +20,7 @@ struct drawcall {
 	unsigned int n_buffers, n_textures, n_uniforms, n_attributes;
 	int yidx, uidx, vidx;
 	struct bind buffers[10];
+
 	/* Massive hack... any -1 special indexes land in scratch */
 	struct bind scratch;
 	struct bind textures[10];
@@ -27,7 +28,7 @@ struct drawcall {
 	struct attr attributes[10];
 	unsigned int n_indices;
 
-	struct fbo fbo;
+	struct fbo *fbo;
 	struct viewport viewport;
 
 	void (*draw)(struct drawcall *);
