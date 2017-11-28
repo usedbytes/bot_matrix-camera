@@ -12,12 +12,19 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <pthread.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/ioctl.h>
+#include <linux/spi/spidev.h>
 
 #include <pam.h>
 
 #include <GLES2/gl2.h>
 #include <GLES/gl.h>
 #include <GLES/glext.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include "pint.h"
 #include "shader.h"
 #include "texture.h"
@@ -25,6 +32,10 @@
 #include "mesh.h"
 #include "feed.h"
 #include "drawcall.h"
+#if USE_SHARED_FBO
+#include "interface/vcsm/user-vcsm.h"
+#include "shared_fbo.h"
+#endif
 
 #include "EGL/egl.h"
 
@@ -33,6 +44,9 @@
 #define WIDTH 640
 #define HEIGHT 480
 #define MESHPOINTS 32
+
+extern int draw_rect(int fd, unsigned int x, unsigned int y, unsigned int w,
+	      unsigned int h, char *data, unsigned int stride, bool flip);
 
 volatile bool should_exit = 0;
 
@@ -388,6 +402,42 @@ struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, c
 	return dc;
 }
 
+#if USE_SHARED_FBO
+struct foo {
+	int fd;
+	char *data;
+};
+
+void dump_hex(unsigned int len, char *data) {
+	unsigned int i;
+
+	for (i = 0; i < len; i++) {
+		printf("%02x", data[i]);
+	}
+	printf("\n");
+}
+
+void *async(void *p) {
+	struct foo *foo = p;
+
+	draw_rect(foo->fd, 0, 0, 32, 16, foo->data, 64 * 4, false);
+	draw_rect(foo->fd, 0, 16, 32, 16, foo->data + (64 * 4 * 16), 64 * 4, true);
+
+	/*
+	int i;
+	char *d = foo->data;
+	printf("=====================\n");
+	for (i = 0; i < 32; i++) {
+		dump_hex(32 * 4, d);
+		d += 64*4;
+	}
+	printf("=====================\n");
+	*/
+
+	return NULL;
+}
+#endif
+
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
@@ -418,10 +468,40 @@ int main(int argc, char *argv[]) {
 	struct feed *feed = feed_init(pint);
 	check(feed);
 
-	struct fbo *fbo = create_fbo(32, 32, 0);
 	struct drawcall *dc;
 	struct list_head drawcalls;
 	list_init(&drawcalls);
+
+#if USE_SHARED_FBO
+	printf("Using shared FBO\n");
+
+	i = vcsm_init();
+	fprintf(stderr, "vcsm_init(): %d\n", i);
+
+	uint32_t spd = 3300000;
+	struct fbo *fbo = shared_fbo_create(pint, 32, 32);
+	static char buf[64 * 4 * 32];
+	pthread_t id;
+	bool have_thread = false;
+
+	int fd = open("/dev/spidev0.0", O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "Failed opening spidev: %s\n", strerror(errno));
+		return 1;
+	}
+	i = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &spd);
+	if (i != 0) {
+		fprintf(stderr, "Failed setting spidev WR: %s\n", strerror(errno));
+		goto fail;
+	}
+
+	struct foo foo = {
+		.fd = fd,
+		.data = buf,
+	};
+#else
+	struct fbo *fbo = create_fbo(32, 32, 0);
+#endif
 
 	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl", NULL);
 	check(dc);
@@ -462,6 +542,30 @@ int main(int argc, char *argv[]) {
 		}
 
 		pint->swap_buffers(pint);
+		glFinish();
+
+#if USE_SHARED_FBO
+		{
+			int32_t stride;
+			char *map = shared_fbo_map(fbo, &stride);
+			if (!map) {
+				fprintf(stderr, "Failed to map shared buffer\n");
+				break;
+			}
+
+			if (have_thread) {
+				pthread_join(id, NULL);
+			}
+			memcpy(buf, map, stride * 32);
+			i = pthread_create(&id, NULL, async, &foo);
+			if (i != 0) {
+				fprintf(stderr, "Failed creating thread: %s\n", strerror(errno));
+			}
+			have_thread = true;
+
+			shared_fbo_unmap(fbo);
+		}
+#endif
 
 		feed->queue(feed);
 
@@ -473,8 +577,12 @@ int main(int argc, char *argv[]) {
 		a = b;
 	}
 
+fail:
 	feed->terminate(feed);
 	pint->terminate(pint);
+#if USE_SHARED_FBO
+	vcsm_exit();
+#endif
 
 	return EXIT_SUCCESS;
 }
