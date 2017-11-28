@@ -62,9 +62,9 @@ void intHandler(int dummy) {
  * scales/translates everything so that on-screen points are 0-1
  */
 static const GLfloat mat[] = {
-	2.0f,  0.0f,  0.0f,  -1.0f,
 	0.0f,  2.0f,  0.0f,  -1.0f,
-	0.0f,  0.0f,  0.0f,  0.0f,
+	2.0f,  0.0f,  0.0f,  -1.0f,
+	0.0f,  0.0f,  1.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
 
@@ -83,22 +83,22 @@ static const GLfloat ymat[] = {
 };
 
 static const GLfloat umat[] = {
-	1.0f,  0.0f,  0.0f,  0.0f,
-	0.0f, -1.0f,  0.0f,  1.0f,
-	0.0f,  0.0f,  0.0f,  0.0f,
-	0.0f,  0.0f,  0.0f,  1.0f,
-};
-
-static const GLfloat vmat[] = {
 	1.0f,  0.0f,  0.0f, -1.0f,
 	0.0f, -1.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
 
+static const GLfloat vmat[] = {
+	1.0f,  0.0f,  0.0f,  0.0f,
+	0.0f, -1.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  0.0f,  0.0f,  1.0f,
+};
+
 static const GLfloat rgbmat[] = {
-	-1.0f,  0.0f,  0.0f, 1.0f,
-	0.0f,  1.0f,  0.0f,  -1.0f,
+	1.0f,  0.0f,  0.0f,  0.0f,
+	0.0f,  1.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  0.0f,  1.0f,
 };
@@ -229,10 +229,10 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
 	const GLfloat quad[] = {
-		0.2f,  0.2f, 0.0f,  0.0f,
-		1.0f,  0.0f, 1.0f,  0.0f,
+		0.0f,  0.0f, 0.0f,  0.5f,
+		1.0f,  0.0f, 0.5f,  0.5f,
 		0.0f,  1.0f, 0.0f,  1.0f,
-		0.8f,  0.8f, 1.0f,  1.0f,
+		1.0f,  1.0f, 0.5f,  1.0f,
 	};
 	const GLshort idx[] = {
 		0, 2, 1, 3,
