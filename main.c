@@ -44,6 +44,8 @@
 #define WIDTH 640
 #define HEIGHT 480
 #define MESHPOINTS 32
+#define MATRIX_W 32
+#define MATRIX_H 32
 
 extern int draw_rect(int fd, unsigned int x, unsigned int y, unsigned int w,
 	      unsigned int h, char *data, unsigned int stride, bool flip);
@@ -181,13 +183,15 @@ struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 	int ret;
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
+	float min_y_ndc = 1.0f - ((float)MATRIX_H / (float)fbo->height);
+	float max_x_ndc = ((float)MATRIX_W / (float)fbo->width);
 	// Map the top-left quadrant of the fbo to 0:1 in NDC
 	// (then use the MVP matrix to map 0:1 in NDC to the viewport)
 	const GLfloat quad[] = {
-		0.0f,  0.0f, 0.0f,  0.5f,
+		0.0f,  0.0f, 0.0f,  min_y_ndc,
 		0.0f,  1.0f, 0.0f,  1.0f,
-		1.0f,  0.0f, 0.5f,  0.5f,
-		1.0f,  1.0f, 0.5f,  1.0f,
+		1.0f,  0.0f, max_x_ndc,  min_y_ndc,
+		1.0f,  1.0f, max_x_ndc,  1.0f,
 	};
 	/*
 	 * Map 0:1 in NDC to the full viewport.
@@ -265,18 +269,6 @@ struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 	return dc;
 }
 
-#define ALIGN_UP(_x, _align) ((_x + (_align - 1)) & ~(_align - 1))
-
-static uint32_t next_pow2(uint32_t x)
-{
-	return 1 << (32 - __builtin_clz(x - 1));
-}
-
-static uint32_t max(uint32_t a, uint32_t b)
-{
-	return a > b ? a : b;
-}
-
 static struct fbo *create_fbo(uint32_t width, uint32_t height, GLuint texture)
 {
 	struct fbo *fbo = malloc(sizeof(*fbo));
@@ -292,8 +284,8 @@ static struct fbo *create_fbo(uint32_t width, uint32_t height, GLuint texture)
 	}
 	glBindTexture(GL_TEXTURE_2D, fbo->texture);
 
-	fbo->width = max(next_pow2(ALIGN_UP(width, 64)), next_pow2(ALIGN_UP(height, 64)));
-	fbo->height = fbo->width;
+	fbo->width = width;
+	fbo->height = height;
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, fbo->width, fbo->height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -470,7 +462,7 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "vcsm_init(): %d\n", i);
 
 	uint32_t spd = 3300000;
-	struct fbo *fbo = shared_fbo_create(pint, 32, 32);
+	struct fbo *fbo = shared_fbo_create(pint, MATRIX_W, MATRIX_H);
 	static char buf[64 * 4 * 32];
 	pthread_t id;
 	bool have_thread = false;
@@ -491,7 +483,7 @@ int main(int argc, char *argv[]) {
 		.data = buf,
 	};
 #else
-	struct fbo *fbo = create_fbo(32, 32, 0);
+	struct fbo *fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
 #endif
 
 	struct viewport vp = { 0, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
@@ -509,7 +501,7 @@ int main(int argc, char *argv[]) {
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 
-	vp = (struct viewport){ 0, fbo->height - 32, 32, 32 };
+	vp = (struct viewport){ 0, fbo->height - MATRIX_H, MATRIX_W, MATRIX_H };
 	dc = get_camera_drawcall("vertex_shader.glsl", FRAGMENT_SHADER, &vp, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
