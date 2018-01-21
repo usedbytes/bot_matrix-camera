@@ -27,10 +27,8 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 
 	if (dc->fbo) {
 		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo->handle);
-		glViewport(0, 0, dc->fbo->width, dc->fbo->height);
-	} else {
-		glViewport(dc->viewport.x, dc->viewport.y, dc->viewport.w, dc->viewport.h);
 	}
+	glViewport(dc->viewport.x, dc->viewport.y, dc->viewport.w, dc->viewport.h);
 
 	for (i = 0; i < dc->n_textures; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
