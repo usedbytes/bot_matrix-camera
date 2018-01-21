@@ -57,29 +57,6 @@ void intHandler(int dummy) {
 	should_exit = 1;
 }
 
-/*
- * Simple MVP matrix which flips the Y axis (so 0,0 is top left) and
- * scales/translates everything so that on-screen points are 0-1
- */
-static const GLfloat ymat[] = {
-	2.0f,  0.0f,  0.0f,  -1.0f,
-	0.0f, -2.0f,  0.0f,  1.0f,
-	0.0f,  0.0f,  0.0f,  0.0f,
-	0.0f,  0.0f,  0.0f,  1.0f,
-};
-
-/*
- * Map 0:1 in NDC to the full viewport.
- * Don't flip Y, because we already flipped it rendering into the FBO.
- */
-static const GLfloat rgbmat[] = {
-	2.0f,  0.0f,  0.0f,  -1.0f,
-	0.0f,  2.0f,  0.0f,  -1.0f,
-	0.0f,  0.0f,  0.0f,  0.0f,
-	0.0f,  0.0f,  0.0f,  1.0f,
-};
-
-
 float K[] = { 0, 0, 0, 1.0 };
 
 void brown(float xcoord, float ycoord, float *xout, float *yout)
@@ -197,7 +174,7 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 	return nanos + (1000000000 * sec);
 }
 
-struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
+struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 {
 	GLint posLoc, tcLoc, mvpLoc, texLoc;
 	struct drawcall *dc = calloc(1, sizeof(*dc));
@@ -212,11 +189,26 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 		1.0f,  0.0f, 0.5f,  0.5f,
 		1.0f,  1.0f, 0.5f,  1.0f,
 	};
+	/*
+	 * Map 0:1 in NDC to the full viewport.
+	 * Don't flip Y, because we already flipped it rendering into the FBO.
+	 */
+	static const GLfloat mvp[] = {
+		2.0f,  0.0f,  0.0f,  -1.0f,
+		0.0f,  2.0f,  0.0f,  -1.0f,
+		0.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
+	};
+
 	const GLshort idx[] = {
 		0, 1, 2, 3,
 	};
 
 	GLuint vertices, indices;
+
+	if (!vp) {
+		return NULL;
+	}
 
 	glGenBuffers(1, &vertices);
 	glBindBuffer(GL_ARRAY_BUFFER, vertices);
@@ -264,10 +256,7 @@ struct drawcall *draw_fbo_drawcall(const GLfloat *mvp, struct fbo *fbo)
 	dc->n_textures = 1;
 	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = fbo->texture };
 
-	dc->viewport.x = 0;
-	dc->viewport.y = 0;
-	dc->viewport.w = WIDTH;
-	dc->viewport.h = HEIGHT;
+	dc->viewport = *vp;
 
 	dc->draw = draw_elements;
 
@@ -328,11 +317,26 @@ fail:
 	return NULL;
 }
 
-struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, const char *fs_fname, struct fbo *fbo)
+struct drawcall *get_camera_drawcall(const char *vs_fname, const char *fs_fname, struct viewport *vp, struct fbo *fbo)
 {
+	/*
+	 * Simple MVP matrix which flips the Y axis (so 0,0 is top left) and
+	 * scales/translates everything so that on-screen points are 0-1
+	 */
+	static const GLfloat mvp[] = {
+		2.0f,  0.0f,  0.0f,  -1.0f,
+		0.0f, -2.0f,  0.0f,  1.0f,
+		0.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
+	};
+
 	GLint posLoc, tcLoc, mvpLoc, texLoc;
 	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
+
+	if (!vp) {
+		return NULL;
+	}
 
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
@@ -379,10 +383,7 @@ struct drawcall *get_camera_drawcall(const GLfloat *mvp, const char *vs_fname, c
 	dc->uidx = 1;
 	dc->vidx = 2;
 
-	dc->viewport.x = 0;
-	dc->viewport.y = 0;
-	dc->viewport.w = WIDTH;
-	dc->viewport.h = HEIGHT;
+	dc->viewport = *vp;
 
 	dc->fbo = fbo;
 	dc->draw = draw_elements;
@@ -493,45 +494,30 @@ int main(int argc, char *argv[]) {
 	struct fbo *fbo = create_fbo(32, 32, 0);
 #endif
 
-	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", "y_shader.glsl", NULL);
+	struct viewport vp = { 0, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
+	dc = get_camera_drawcall("vertex_shader.glsl", "y_shader.glsl", &vp, NULL);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
-	dc->viewport.x = 0;
-	dc->viewport.y = HEIGHT / 2;
-	dc->viewport.w = WIDTH / 2;
-	dc->viewport.h = HEIGHT / 2;
 
-	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", "u_shader.glsl", NULL);
+	vp = (struct viewport){ 0, 0, WIDTH / 2, HEIGHT / 2 };
+	dc = get_camera_drawcall("vertex_shader.glsl", "u_shader.glsl", &vp, NULL);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
-	dc->viewport.x = 0;
-	dc->viewport.y = 0;
-	dc->viewport.w = WIDTH / 2;
-	dc->viewport.h = HEIGHT / 2;
 
-	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", "v_shader.glsl", NULL);
+	vp = (struct viewport){ WIDTH / 2, 0, WIDTH / 2, HEIGHT / 2 };
+	dc = get_camera_drawcall("vertex_shader.glsl", "v_shader.glsl", &vp, NULL);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
-	dc->viewport.x = WIDTH / 2;
-	dc->viewport.y = 0;
-	dc->viewport.w = WIDTH / 2;
-	dc->viewport.h = HEIGHT / 2;
 
-	dc = get_camera_drawcall(ymat, "vertex_shader.glsl", FRAGMENT_SHADER, fbo);
+	vp = (struct viewport){ 0, fbo->height - 32, 32, 32 };
+	dc = get_camera_drawcall("vertex_shader.glsl", FRAGMENT_SHADER, &vp, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
-	dc->viewport.x = 0;
-	dc->viewport.y = fbo->height - 32;
-	dc->viewport.w = 32;
-	dc->viewport.h = 32;
 
-	dc = draw_fbo_drawcall(rgbmat, fbo);
+	vp = (struct viewport){ WIDTH / 2, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
+	dc = draw_fbo_drawcall(&vp, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
-	dc->viewport.x = WIDTH / 2;
-	dc->viewport.y = HEIGHT / 2;
-	dc->viewport.w = WIDTH / 2;
-	dc->viewport.h = HEIGHT / 2;
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
