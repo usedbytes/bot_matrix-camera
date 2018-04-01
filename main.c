@@ -25,6 +25,7 @@
 #include <GLES/glext.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include "compositor.h"
 #include "pint.h"
 #include "shader.h"
 #include "texture.h"
@@ -439,11 +440,13 @@ int main(int argc, char *argv[]) {
 
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	struct feed *feed = feed_init(pint);
 	check(feed);
 
-	struct drawcall *dc;
+	struct drawcall *dc, *last_dc;
 	struct list_head drawcalls;
 	list_init(&drawcalls);
 
@@ -499,9 +502,21 @@ int main(int argc, char *argv[]) {
 	list_add_end(&drawcalls, &dc->list);
 
 	vp = (struct viewport){ WIDTH / 2, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
-	dc = draw_fbo_drawcall(&vp, fbo);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	last_dc = draw_fbo_drawcall(&vp, fbo);
+	check(last_dc);
+
+	struct compositor *cmp = compositor_create(fbo, feed);
+	vp = (struct viewport){ 0, fbo->height - MATRIX_H, MATRIX_W, MATRIX_H };
+	compositor_set_viewport(cmp, &vp);
+	check(cmp);
+
+	struct texture *bmt = texture_load("bot_m.png");
+	check(bmt);
+
+	struct layer *layer = compositor_create_layer(cmp);
+	layer_set_texture(layer, bmt->handle);
+	texture_set_filter(bmt, GL_NEAREST);
+	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -520,6 +535,10 @@ int main(int argc, char *argv[]) {
 
 			l = l->next;
 		}
+
+		compositor_draw(cmp);
+
+		drawcall_draw(feed, last_dc);
 
 		pint->swap_buffers(pint);
 		glFinish();
