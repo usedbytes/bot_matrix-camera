@@ -104,27 +104,6 @@ void brown(float xcoord, float ycoord, float *xout, float *yout)
 	*/
 }
 
-GLint get_shader(const char *vs_fname, const char *fs_fname)
-{
-	char *vertex_shader_source, *fragment_shader_source;
-
-	vertex_shader_source = shader_load(vs_fname);
-	if (!vertex_shader_source) {
-		return -1;
-	}
-	printf("Vertex shader:\n");
-	printf("%s\n", vertex_shader_source);
-
-	fragment_shader_source = shader_load(fs_fname);
-	if (!fragment_shader_source) {
-		return -1;
-	}
-	printf("Fragment shader:\n");
-	printf("%s\n", fragment_shader_source);
-
-	return shader_compile(vertex_shader_source, fragment_shader_source);
-}
-
 struct mesh {
 	GLfloat *mesh;
 	unsigned int nverts;
@@ -235,7 +214,7 @@ struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	ret = get_shader("vertex_shader.glsl", "quad_fs.glsl");
+	ret = shader_load_compile_link("vertex_shader.glsl", "quad_fs.glsl");
 	check(ret >= 0);
 	dc->shader_program = ret;
 
@@ -343,7 +322,7 @@ struct drawcall *get_camera_drawcall(const char *vs_fname, const char *fs_fname,
 
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
-	ret = get_shader(vs_fname, fs_fname);
+	ret = shader_load_compile_link(vs_fname, fs_fname);
 	check(ret >= 0);
 	dc->shader_program = ret;
 

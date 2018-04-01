@@ -105,3 +105,24 @@ GLint shader_compile(const char *vertex_shader_source, const char *fragment_shad
 	glDeleteShader(fragment_shader);
 	return shader_program;
 }
+
+GLint shader_load_compile_link(const char *vs_fname, const char *fs_fname)
+{
+	char *vertex_shader_source, *fragment_shader_source;
+
+	vertex_shader_source = shader_load(vs_fname);
+	if (!vertex_shader_source) {
+		return -1;
+	}
+	printf("Vertex shader:\n");
+	printf("%s\n", vertex_shader_source);
+
+	fragment_shader_source = shader_load(fs_fname);
+	if (!fragment_shader_source) {
+		return -1;
+	}
+	printf("Fragment shader:\n");
+	printf("%s\n", fragment_shader_source);
+
+	return shader_compile(vertex_shader_source, fragment_shader_source);
+}
