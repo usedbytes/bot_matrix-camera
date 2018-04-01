@@ -1,6 +1,6 @@
 TARGET=camera
 SRC=main.c shader.c texture.c mesh.c drawcall.c list.c
-LDFLAGS=-lnetpbm -lm
+LDFLAGS=-lnetpbm -lm -lpng
 CFLAGS=-g -Wall -I/usr/include/netpbm
 
 ifeq ($(PINT),glfw)
