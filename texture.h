@@ -19,5 +19,6 @@ struct texture {
 };
 
 struct texture *texture_load(const char *file);
+void texture_set_filter(struct texture *tex, GLint mode);
 
 #endif /* __TEXTURE_H__ */

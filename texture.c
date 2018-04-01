@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <GLES2/gl2.h>
+#include <GLES/gl.h>
 
 #include <pam.h>
 #include <png.h>
@@ -164,6 +166,7 @@ int load_png(struct texture *tex, FILE *fp)
 
 struct texture *texture_load(const char *file)
 {
+	GLint format;
 	struct texture *tex;
 	char *ext;
 	int ret;
@@ -197,5 +200,36 @@ struct texture *texture_load(const char *file)
 	}
 
 	fclose(fp);
+
+	glGenTextures(1, &tex->handle);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex->handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	switch (tex->ncmp) {
+		case 4:
+			format = GL_RGBA;
+			break;
+		case 3:
+			format = GL_RGB;
+			break;
+		case 1:
+			format = GL_LUMINANCE;
+			break;
+	}
+	glTexImage2D(GL_TEXTURE_2D, 0, format, tex->width, tex->height, 0, format, GL_UNSIGNED_BYTE, tex->data);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	return tex;
+}
+
+void texture_set_filter(struct texture *tex, GLint mode)
+{
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex->handle);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mode);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mode);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
