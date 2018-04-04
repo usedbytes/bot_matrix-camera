@@ -66,9 +66,8 @@ static int dequeue(struct feed *f)
 		eglDestroyImageKHR(feed->display, feed->uimg);
 		feed->uimg = EGL_NO_IMAGE_KHR;
 	}
-	glFinish();
 
-	feed->uimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	feed->uimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_U, feed->buf->egl_buf, NULL);
 	if (feed->uimg == EGL_NO_IMAGE_KHR) {
 		fprintf(stderr, "Failed to get uimg!\n");
 		return -1;
@@ -80,7 +79,7 @@ static int dequeue(struct feed *f)
 		eglDestroyImageKHR(feed->display, feed->vimg);
 		feed->vimg = EGL_NO_IMAGE_KHR;
 	}
-	feed->vimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_Y, feed->buf->egl_buf, NULL);
+	feed->vimg = eglCreateImageKHR(feed->display, EGL_NO_CONTEXT, EGL_IMAGE_BRCM_MULTIMEDIA_V, feed->buf->egl_buf, NULL);
 	if (feed->vimg == EGL_NO_IMAGE_KHR) {
 		fprintf(stderr, "Failed to get vimg!\n");
 		return -1;

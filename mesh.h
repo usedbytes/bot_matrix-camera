@@ -14,5 +14,6 @@ GLshort *mesh_build_indices(unsigned int xpoints, unsigned int ypoints,  unsigne
 
 void mesh_dump(GLfloat *mesh, unsigned int xpoints, unsigned int ypoints);
 void mesh_indices_dump(GLshort *indices, unsigned int nindices);
+GLfloat *mesh_build_from_file(const char *file, unsigned int *nelems, int *xpoints, int *ypoints);
 
 #endif /* __MESH_H__ */
