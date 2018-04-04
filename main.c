@@ -174,30 +174,35 @@ struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 	int ret;
 	dc->yidx = dc->uidx = dc->vidx = -1;
 
-	float min_y_ndc = 1.0f - ((float)MATRIX_H / (float)fbo->height);
-	float max_x_ndc = ((float)MATRIX_W / (float)fbo->width);
-	// Map the top-left quadrant of the fbo to 0:1 in NDC
-	// (then use the MVP matrix to map 0:1 in NDC to the viewport)
-	const GLfloat quad[] = {
-		0.0f,  0.0f, 0.0f,  min_y_ndc,
-		0.0f,  1.0f, 0.0f,  1.0f,
-		1.0f,  0.0f, max_x_ndc,  min_y_ndc,
-		1.0f,  1.0f, max_x_ndc,  1.0f,
-	};
 	/*
-	 * Map 0:1 in NDC to the full viewport.
-	 * Don't flip Y, because we already flipped it rendering into the FBO.
+	 * The image should fill the bottom-left of the texture, so grab
+	 * the appropriate part and map to the full NDC range
+	 */
+	float max_x_uv = ((float)MATRIX_W / (float)fbo->width);
+	float max_y_uv = ((float)MATRIX_H / (float)fbo->height);
+	const GLfloat quad[] = {
+		-1.0f,  -1.0f,      0.0f,     0.0f,
+		 1.0f,  -1.0f,  max_x_uv,     0.0f,
+		-1.0f,   1.0f,      0.0f, max_y_uv,
+		 1.0f,   1.0f,  max_x_uv, max_y_uv,
+	};
+	const GLshort idx[] = {
+		0, 1, 2, 3,
+	};
+
+	/*
+	 * Everything is rendered into the FBO flipped vertically, because
+	 * GL co-ordinates are the opposite of the raster scan expected
+	 * by the display. So, when drawing the FBO for "looking at"
+	 * we should flip Y to make it the right-way-up
 	 */
 	static const GLfloat mvp[] = {
-		2.0f,  0.0f,  0.0f,  -1.0f,
-		0.0f,  2.0f,  0.0f,  -1.0f,
+		1.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  -1.0f,  0.0f,  0.0f,
 		0.0f,  0.0f,  0.0f,  0.0f,
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 
-	const GLshort idx[] = {
-		0, 1, 2, 3,
-	};
 
 	GLuint vertices, indices;
 
@@ -478,7 +483,7 @@ int main(int argc, char *argv[]) {
 		.data = buf,
 	};
 #else
-	struct fbo *fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
+	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
 #endif
 
 	struct viewport vp = { 0, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
@@ -496,17 +501,24 @@ int main(int argc, char *argv[]) {
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 
-	vp = (struct viewport){ 0, fbo->height - MATRIX_H, MATRIX_W, MATRIX_H };
+	/*
+	 * Render into the bottom-left of the FBO (in GL co-ordinates). This is
+	 * actually the top-left when we read it via VCSM (or, said differently,
+	 * the first row of bytes in the VCSM buffer corresponds to the bottom
+	 * row of pixels in GL co-ordinate space)
+	 */
+	vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
 	dc = get_camera_drawcall("vertex_shader.glsl", FRAGMENT_SHADER, &vp, fbo);
 	check(dc);
 	list_add_end(&drawcalls, &dc->list);
 
+	/* When drawing the FBO to the screen, we flip it with the MVP matrix */
 	vp = (struct viewport){ WIDTH / 2, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
 	last_dc = draw_fbo_drawcall(&vp, fbo);
 	check(last_dc);
 
 	struct compositor *cmp = compositor_create(fbo, feed);
-	vp = (struct viewport){ 0, fbo->height - MATRIX_H, MATRIX_W, MATRIX_H };
+	vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
 	compositor_set_viewport(cmp, &vp);
 	check(cmp);
 
