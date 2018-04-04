@@ -307,10 +307,10 @@ struct drawcall *get_camera_drawcall(const char *vs_fname, const char *fs_fname,
 	 * scales/translates everything so that on-screen points are 0-1
 	 */
 	static const GLfloat mvp[] = {
-		2.0f,  0.0f,  0.0f,  -1.0f,
-		0.0f, -2.0f,  0.0f,  1.0f,
-		0.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  0.0f,  0.0f,  1.0f,
+		 0.0f,  2.0f,  0.0f,  -1.0f,
+		 2.0f,  0.0f,  0.0f,  -1.0f,
+		 0.0f,  0.0f,  0.0f,   0.0f,
+		 0.0f,  0.0f,  0.0f,   1.0f,
 	};
 
 	GLint posLoc, tcLoc, mvpLoc, texLoc;
