@@ -3,8 +3,113 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "mesh.h"
+
+double *mesh_load(const char *file, int *width, int *height) {
+	int i, j, ret;
+	double *mesh;
+	char *line = NULL;
+	size_t n = 0;
+	FILE *fp = fopen(file, "r");
+	if (!fp) {
+		fprintf(stderr, "Couldn't open file.\n");
+		return NULL;
+	}
+
+	ret = fscanf(fp, "%d,%d\n", width, height);
+	if (ret != 2) {
+		fprintf(stderr, "Couldn't get w/h\n");
+		return NULL;
+	}
+
+	if (*width != *height) {
+		fprintf(stderr, "Only square meshes are supported.\n");
+		return NULL;
+	}
+
+	mesh = calloc((*width) * (*height) * 2, sizeof(*mesh));
+	if (!mesh) {
+		return NULL;
+	}
+
+	for (i = 0; i < (*height); i++) {
+		char *tok;
+
+		ret = getline(&line, &n, fp);
+		if (ret < 0) {
+			fprintf(stderr, "Failed reading line %d\n", i);
+			return NULL;
+		}
+		tok = strtok(line, ",");
+		for (j = 0; j < (*width) * 2; j++) {
+			ret = sscanf(tok, "%lf", &mesh[i * (*width) * 2 + j]);
+			if (ret != 1) {
+				fprintf(stderr, "Failed reading item %d,%d\n", j,i);
+				return NULL;
+			}
+
+			tok = strtok(NULL, ",");
+			if (!tok && j < ((*width) * 2) - 1) {
+				fprintf(stderr, "Line %d ended too soon\n", i);
+				return NULL;
+			}
+		}
+		free(line);
+		n = 0;
+		line = NULL;
+	}
+
+	return mesh;
+}
+
+GLfloat *mesh_build_from_file(const char *file, unsigned int *nelems, int *xp, int *yp) {
+	int xpoints, ypoints;
+	double *arr = mesh_load(file, &xpoints, &ypoints);
+	if (!arr) {
+		return NULL;
+	}
+
+	unsigned int row, col, nmesh = xpoints * ypoints * 4;
+	double xstep = (double)1.0f / (xpoints - 1);
+	double ystep = (double)1.0f / (ypoints - 1);
+	unsigned int i = 0;
+
+	GLfloat *cursor;
+	GLfloat *mesh = malloc(sizeof(*mesh) * nmesh);
+	if (!mesh) {
+		return NULL;
+	}
+
+	cursor = mesh;
+	for (row = 0; row < ypoints; row++) {
+		GLfloat y = row * ystep;
+		for (col = 0; col < xpoints; col++, cursor += 4, i++) {
+			GLfloat x = col * xstep;
+
+			cursor[0] = x;
+			cursor[1] = y;
+
+			cursor[2] = arr[(row * xpoints * 2) + (col * 2)];
+			cursor[3] = arr[(row * xpoints * 2) + (col * 2) + 1];
+		}
+	}
+
+	if (nelems) {
+		*nelems = nmesh;
+	}
+
+	if (xp) {
+		*xp = xpoints;
+	}
+
+	if (yp) {
+		*yp = ypoints;
+	}
+
+	return mesh;
+}
 
 GLfloat *mesh_build(unsigned int xpoints, unsigned int ypoints, tex_coord_func texfunc,
 		    unsigned int *nelems)

@@ -135,25 +135,36 @@ struct mesh {
 	GLuint ihandle;
 };
 
-struct mesh *get_mesh()
+struct mesh *get_mesh(const char *file)
 {
+	int xpoints, ypoints;
 	struct mesh *mesh = calloc(1, sizeof(*mesh));
 	if (!mesh) {
 		return NULL;
 	}
 
-	mesh->mesh = mesh_build(MESHPOINTS, MESHPOINTS, brown, &mesh->nverts);
-	if (!mesh->mesh) {
-		free(mesh);
-		return NULL;
+	if (file) {
+		mesh->mesh = mesh_build_from_file(file, &mesh->nverts, &xpoints, &ypoints);
+		if (!mesh->mesh) {
+			free(mesh);
+			return NULL;
+		}
+	} else {
+		xpoints = ypoints = MESHPOINTS;
+		mesh->mesh = mesh_build(xpoints, ypoints, brown, &mesh->nverts);
+		if (!mesh->mesh) {
+			free(mesh);
+			return NULL;
+		}
 	}
+
 
 	glGenBuffers(1, &mesh->mhandle);
 	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(mesh->mesh[0]) * mesh->nverts, mesh->mesh, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-	mesh->indices = mesh_build_indices(MESHPOINTS, MESHPOINTS, &mesh->nindices);
+	mesh->indices = mesh_build_indices(xpoints, ypoints, &mesh->nindices);
 	if (!mesh->indices) {
 		free(mesh->mesh);
 		free(mesh);
@@ -429,6 +440,7 @@ int main(int argc, char *argv[]) {
 
 	signal(SIGINT, intHandler);
 
+	/*
 	if (argc == 5) {
 		sscanf(argv[1], "%f", &K[0]);
 		sscanf(argv[2], "%f", &K[1]);
@@ -437,9 +449,10 @@ int main(int argc, char *argv[]) {
 
 		K[3] = K[3] - (K[0] + K[1] + K[2]);
 	}
+	*/
 	pm_init(argv[0], 0);
 
-	mesh = get_mesh();
+	mesh = get_mesh(argc == 2 ? argv[1] : NULL);
 	check(mesh);
 
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
