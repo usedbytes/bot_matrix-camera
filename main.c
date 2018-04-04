@@ -60,51 +60,6 @@ void intHandler(int dummy) {
 	should_exit = 1;
 }
 
-float K[] = { 0, 0, 0, 1.0 };
-
-void brown(float xcoord, float ycoord, float *xout, float *yout)
-{
-	double asp = (double)(WIDTH) / (double)(HEIGHT);
-	double xoffs = ((double)(WIDTH - HEIGHT) / 2.0f) / (double)HEIGHT;
-	//double xdiff = (xcoord * 2) - 1;
-	double xdiff = (((xcoord * asp) - xoffs) * 2) - 1;
-	double ydiff = (ycoord * 2) - 1;
-	double r = sqrt(xdiff*xdiff + ydiff*ydiff);
-	double newr;
-	double xunit;
-	double yunit;
-
-	xunit = xdiff / r;
-	if (isnan(xunit)) {
-		xunit = 0;
-	}
-
-	yunit = ydiff / r;
-	if (isnan(yunit)) {
-		yunit = 0;
-	}
-
-
-	// Same algorithm used by ImageMagick.
-	// Defined by Professor Helmut Dersch:
-	// http://replay.waybackmachine.org/20090613040829/http://www.all-in-one.ee/~dersch/barrel/barrel.html
-	// http://www.imagemagick.org/Usage/distorts/#barrel
-	newr = r * (K[0]*pow(r, 3) + K[1]*pow(r,2) + K[2]*r + K[3]);
-
-	*xout = (((newr*xunit + 1) / 2) + xoffs) / asp;
-	*yout = (newr*yunit + 1) / 2;
-
-	/*
-	*xout = (0.5 + (xdiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
-	*yout = (0.5 + (ydiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
-	*/
-
-	/*
-	*xout = xcoord + (xdiff * K[0] * r * r) + (xdiff * K[1] * r * r *r * r);
-	*yout = ycoord + (ydiff * K[0] * r * r) + (ydiff * K[1] * r * r *r * r);
-	*/
-}
-
 struct mesh {
 	GLfloat *mesh;
 	unsigned int nverts;
@@ -131,7 +86,7 @@ struct mesh *get_mesh(const char *file)
 		}
 	} else {
 		xpoints = ypoints = MESHPOINTS;
-		mesh->mesh = mesh_build(xpoints, ypoints, brown, &mesh->nverts);
+		mesh->mesh = mesh_build(xpoints, ypoints, NULL, &mesh->nverts);
 		if (!mesh->mesh) {
 			free(mesh);
 			return NULL;
@@ -425,16 +380,6 @@ int main(int argc, char *argv[]) {
 
 	signal(SIGINT, intHandler);
 
-	/*
-	if (argc == 5) {
-		sscanf(argv[1], "%f", &K[0]);
-		sscanf(argv[2], "%f", &K[1]);
-		sscanf(argv[3], "%f", &K[2]);
-		sscanf(argv[4], "%f", &K[3]);
-
-		K[3] = K[3] - (K[0] + K[1] + K[2]);
-	}
-	*/
 	pm_init(argv[0], 0);
 
 	mesh = get_mesh(argc == 2 ? argv[1] : NULL);
