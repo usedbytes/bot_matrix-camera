@@ -137,7 +137,7 @@ static struct drawcall *get_drawcall(struct compositor *cmp)
 }
 
 /* Identity by default. */
-const GLfloat mvp[] = {
+const GLfloat eye[] = {
 	1.0f,  0.0f,  0.0f,  0.0f,
 	0.0f,  1.0f,  0.0f,  0.0f,
 	0.0f,  0.0f,  1.0f,  0.0f,
@@ -158,7 +158,7 @@ struct layer *compositor_create_layer(struct compositor *cmp)
 		return NULL;
 	}
 
-	layer_set_mvp(layer, mvp);
+	layer_set_transform(layer, eye);
 	layer_set_display_rect(layer, 0.0, 0.0, 1.0, 1.0);
 	layer_set_texture(layer, 0);
 
@@ -181,9 +181,9 @@ void layer_set_display_rect(struct layer *layer, float x, float y, float w, floa
 	layer->dc->viewport.h = layer->cmp->vp.h * h;
 }
 
-void layer_set_mvp(struct layer *layer, const GLfloat *mvp)
+void layer_set_transform(struct layer *layer, const GLfloat *m4)
 {
 	glUseProgram(layer->dc->shader_program);
-	glUniformMatrix4fv(layer->cmp->mvpLoc, 1, GL_FALSE, mvp);
+	glUniformMatrix4fv(layer->cmp->mvpLoc, 1, GL_FALSE, m4);
 	glUseProgram(0);
 }
