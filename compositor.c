@@ -7,7 +7,6 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <stdio.h>
-#include <string.h>
 #include "compositor.h"
 #include "shader.h"
 #include "texture.h"
@@ -184,16 +183,7 @@ void layer_set_display_rect(struct layer *layer, float x, float y, float w, floa
 
 void layer_set_mvp(struct layer *layer, const GLfloat *mvp)
 {
-	GLfloat mmvp[16];
-
-	/* Flip y */
-	memcpy(mmvp, mvp, sizeof(*mvp) * 16);
-	mmvp[0 * 4 + 1] = -mmvp[0 * 4 + 1];
-	mmvp[1 * 4 + 1] = -mmvp[1 * 4 + 1];
-	mmvp[2 * 4 + 1] = -mmvp[2 * 4 + 1];
-	mmvp[3 * 4 + 1] = -mmvp[3 * 4 + 1];
-
 	glUseProgram(layer->dc->shader_program);
-	glUniformMatrix4fv(layer->cmp->mvpLoc, 1, GL_FALSE, mmvp);
+	glUniformMatrix4fv(layer->cmp->mvpLoc, 1, GL_FALSE, mvp);
 	glUseProgram(0);
 }
