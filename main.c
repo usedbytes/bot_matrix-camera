@@ -480,7 +480,7 @@ int main(int argc, char *argv[]) {
 	pthread_t id;
 	bool have_thread = false;
 
-	int fd = open("/dev/spidev0.0", O_RDWR);
+	int fd = open("/dev/spidev1.2", O_RDWR);
 	if (fd < 0) {
 		fprintf(stderr, "Failed opening spidev: %s\n", strerror(errno));
 		return 1;
