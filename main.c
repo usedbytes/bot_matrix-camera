@@ -124,10 +124,12 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 
 struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 {
-	GLint posLoc, tcLoc, mvpLoc, texLoc;
-	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
-	dc->yidx = dc->uidx = dc->vidx = -1;
+	ret = shader_load_compile_link("vertex_shader.glsl", "quad_fs.glsl");
+	check(ret >= 0);
+
+	struct drawcall *dc = drawcall_create(ret);
+	check(dc);
 
 	/*
 	 * The image should fill the bottom-left of the texture, so grab
@@ -158,64 +160,15 @@ struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 
+	drawcall_set_vertex_data(dc, quad, sizeof(quad));
+	drawcall_set_indices(dc, idx, sizeof(idx), sizeof(idx) / sizeof(idx[0]));
 
-	GLuint vertices, indices;
+	drawcall_set_attribute(dc, "position", 2, sizeof(quad[0]) * 4, (GLvoid *)0);
+	drawcall_set_attribute(dc, "tc", 2, sizeof(quad[0]) * 4, (GLvoid *)(sizeof(quad[0]) * 2));
 
-	if (!vp) {
-		return NULL;
-	}
-
-	glGenBuffers(1, &vertices);
-	glBindBuffer(GL_ARRAY_BUFFER, vertices);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glGenBuffers(1, &indices);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-	ret = shader_load_compile_link("vertex_shader.glsl", "quad_fs.glsl");
-	check(ret >= 0);
-	dc->shader_program = ret;
-
-	glUseProgram(dc->shader_program);
-
-	posLoc = glGetAttribLocation(dc->shader_program, "position");
-	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
-	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
-
-	dc->n_attributes = 2;
-	dc->attributes[0] = (struct attr){
-		.loc = posLoc,
-		.size = 2,
-		.stride = sizeof(quad[0]) * 4,
-		.ptr = (GLvoid *)0,
-	};
-	dc->attributes[1] = (struct attr){
-		.loc = tcLoc,
-		.size = 2,
-		.stride = sizeof(quad[0]) * 4,
-		.ptr = (GLvoid *)(sizeof(quad[0]) * 2),
-	};
-
-	texLoc = glGetUniformLocation(dc->shader_program, "tex");
-	glUniform1i(texLoc, 0);
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
-
-	dc->n_buffers = 2;
-	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = vertices };
-	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = indices };
-	dc->n_indices = sizeof(idx) / sizeof(idx[0]);
-
-	dc->n_textures = 1;
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = fbo->texture };
-
-	dc->viewport = *vp;
-
-	dc->draw = draw_elements;
-
-	glUseProgram(0);
+	drawcall_set_mvp(dc, mvp);
+	drawcall_set_texture(dc, "tex", GL_TEXTURE_2D, fbo->texture);
+	drawcall_set_viewport(dc, vp->x, vp->y, vp->w, vp->h);
 
 	return dc;
 }
