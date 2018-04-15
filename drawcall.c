@@ -22,9 +22,11 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 	int i;
 	glUseProgram(dc->shader_program);
 
+	/*
 	dc->textures[dc->yidx] = feed->ytex;
 	dc->textures[dc->uidx] = feed->utex;
 	dc->textures[dc->vidx] = feed->vtex;
+	*/
 
 	if (dc->fbo) {
 		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo->handle);
