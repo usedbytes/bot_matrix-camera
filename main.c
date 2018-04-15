@@ -27,6 +27,7 @@
 #include <EGL/eglext.h>
 #include "compositor.h"
 #include "campipe.h"
+#include "font.h"
 #include "pint.h"
 #include "shader.h"
 #include "texture.h"
@@ -288,6 +289,10 @@ int main(int argc, char *argv[]) {
 	};
 	layer_set_transform(llayer, flipy_double);
 
+	extern const char font_widths[128];
+	struct font *f = font_load("font.png", font_widths);
+	struct drawcall *font_dc = create_font_drawcall(f, WIDTH, HEIGHT);
+	font_calculate(f, font_dc, "BOT MATRIX!", 0.25f);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -301,6 +306,8 @@ int main(int argc, char *argv[]) {
 
 		glClear(GL_COLOR_BUFFER_BIT);
 		compositor_draw(screencmp);
+
+		drawcall_draw(font_dc);
 
 		pint->swap_buffers(pint);
 		glFinish();
