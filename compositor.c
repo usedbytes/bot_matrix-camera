@@ -11,14 +11,12 @@
 #include "shader.h"
 #include "texture.h"
 #include "list.h"
-#include "feed.h"
 #include "drawcall.h"
 #include "EGL/egl.h"
 
 struct compositor {
 	struct list_head layers;
 	struct fbo *fbo;
-	struct feed *feed;
 	struct viewport vp;
 
 	GLint shader, posLoc, tcLoc, mvpLoc, texLoc;
@@ -34,7 +32,7 @@ void compositor_set_viewport(struct compositor *cmp, struct viewport *vp) {
 	cmp->vp = *vp;
 }
 
-struct compositor *compositor_create(struct fbo *fbo, struct feed *feed)
+struct compositor *compositor_create(struct fbo *fbo)
 {
 	struct compositor *cmp = calloc(1, sizeof(*cmp));
 	if (!cmp) {
@@ -43,7 +41,6 @@ struct compositor *compositor_create(struct fbo *fbo, struct feed *feed)
 
 	list_init(&cmp->layers);
 	cmp->fbo = fbo;
-	cmp->feed = feed;
 	cmp->shader = shader_load_compile_link("compositor_vs.glsl", "compositor_fs.glsl");
 	if (cmp->shader <= 0) {
 		fprintf(stderr, "Couldn't get compositor shaders\n");
@@ -68,7 +65,7 @@ void compositor_draw(struct compositor *cmp)
 	struct list_head *node = cmp->layers.next;
 	while (node != &cmp->layers) {
 		struct layer *layer = (struct layer *)node;
-		drawcall_draw(cmp->feed, layer->dc);
+		drawcall_draw(layer->dc);
 
 		node = node->next;
 	}
@@ -92,7 +89,6 @@ static struct drawcall *get_drawcall(struct compositor *cmp)
 		return NULL;
 	}
 
-	dc->yidx = dc->uidx = dc->vidx = -1;
 	dc->n_attributes = 2;
 	dc->attributes[0] = (struct attr){
 		.loc = cmp->posLoc,

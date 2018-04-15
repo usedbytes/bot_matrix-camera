@@ -9,7 +9,6 @@
 #include <GLES2/gl2.h>
 #include <GLES/gl.h>
 
-#include "feed.h"
 #include "drawcall.h"
 
 void draw_elements(struct drawcall *dc)
@@ -17,16 +16,10 @@ void draw_elements(struct drawcall *dc)
 	glDrawElements(GL_TRIANGLE_STRIP, dc->n_indices, GL_UNSIGNED_SHORT, 0);
 }
 
-void drawcall_draw(struct feed *feed, struct drawcall *dc)
+void drawcall_draw(struct drawcall *dc)
 {
 	int i;
 	glUseProgram(dc->shader_program);
-
-	/*
-	dc->textures[dc->yidx] = feed->ytex;
-	dc->textures[dc->uidx] = feed->utex;
-	dc->textures[dc->vidx] = feed->vtex;
-	*/
 
 	if (dc->fbo) {
 		glBindFramebuffer(GL_FRAMEBUFFER, dc->fbo->handle);
@@ -60,10 +53,6 @@ void drawcall_draw(struct feed *feed, struct drawcall *dc)
 		glBindTexture(dc->textures[i].bind, 0);
 	}
 
-	dc->textures[dc->yidx] = (struct bind){ "", 0, 0 };
-	dc->textures[dc->uidx] = (struct bind){ "", 0, 0 };
-	dc->textures[dc->vidx] = (struct bind){ "", 0, 0 };
-
 	if (dc->fbo) {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
@@ -78,8 +67,6 @@ struct drawcall *drawcall_create(GLint shader)
 	if (!dc) {
 		return NULL;
 	}
-
-	dc->yidx = dc->uidx = dc->vidx = -1;
 
 	/* Set up handles for vertices and indices. Data will get added later */
 	glGenBuffers(2, handles);

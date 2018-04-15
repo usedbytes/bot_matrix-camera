@@ -247,7 +247,7 @@ int main(int argc, char *argv[]) {
 	struct campipe_output *op = campipe_output_create(cp, 32, 32, true);
 	check(op);
 
-	struct compositor *cmp = compositor_create(fbo, NULL);
+	struct compositor *cmp = compositor_create(fbo);
 	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
 	compositor_set_viewport(cmp, &vp);
 	check(cmp);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
 		compositor_draw(cmp);
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		drawcall_draw(NULL, last_dc);
+		drawcall_draw(last_dc);
 
 		pint->swap_buffers(pint);
 		glFinish();

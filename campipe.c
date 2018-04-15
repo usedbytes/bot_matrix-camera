@@ -100,7 +100,7 @@ int campipe_dequeue(struct campipe *cp)
 		struct campipe_output *op = (struct campipe_output *)l;
 		output_update_textures(op);
 
-		drawcall_draw(cp->feed, op->dc);
+		drawcall_draw(op->dc);
 
 		l = l->next;
 	}
