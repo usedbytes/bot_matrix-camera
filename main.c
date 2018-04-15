@@ -244,22 +244,25 @@ int main(int argc, char *argv[]) {
 	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
 #endif
 
-	struct campipe_output *op = campipe_output_create(cp, 32, 32, true);
-	check(op);
+	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
+	check(op1);
+
+	struct campipe_output *op2 = campipe_output_create(cp, 32, 32, false);
+	check(op2);
 
 	struct compositor *cmp = compositor_create(fbo);
 	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
 	compositor_set_viewport(cmp, &vp);
 	check(cmp);
 
-	struct layer *layer = compositor_create_layer(cmp);
-	layer_set_texture(layer, campipe_output_get_texture(op));
-	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);
+	struct layer *camlayer = compositor_create_layer(cmp);
+	layer_set_texture(camlayer, campipe_output_get_texture(op1));
+	layer_set_display_rect(camlayer, 0, 0, 1.0, 1.0);
 
 	struct texture *bmt = texture_load("bot_m.png");
 	check(bmt);
 
-	layer = compositor_create_layer(cmp);
+	struct layer *layer = compositor_create_layer(cmp);
 	layer_set_texture(layer, bmt->handle);
 	texture_set_filter(bmt, GL_NEAREST);
 	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);

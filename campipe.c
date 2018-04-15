@@ -165,6 +165,15 @@ fail:
 	return NULL;
 }
 
+static void campipe_output_set_ldc(struct campipe_output *op, bool enable)
+{
+	if (enable) {
+		drawcall_set_attribute(op->dc, "tc", 2, sizeof(op->cp->ldc_mesh[0]) * 4, (GLvoid *)(sizeof(op->cp->ldc_mesh[0]) * 2));
+	} else {
+		drawcall_set_attribute(op->dc, "tc", 2, sizeof(op->cp->ldc_mesh[0]) * 4, (GLvoid *)0);
+	}
+}
+
 struct campipe_output *campipe_output_create(struct campipe *cp, int width, int height, bool ldc)
 {
 	/*
@@ -205,7 +214,7 @@ struct campipe_output *campipe_output_create(struct campipe *cp, int width, int 
 	drawcall_set_indices(op->dc, cp->ldc_indices, cp->nindices * sizeof(*cp->ldc_mesh), cp->nindices);
 
 	drawcall_set_attribute(op->dc, "position", 2, sizeof(cp->ldc_mesh[0]) * 4, (GLvoid *)0);
-	drawcall_set_attribute(op->dc, "tc", 2, sizeof(cp->ldc_mesh[0]) * 4, (GLvoid *)(sizeof(cp->ldc_mesh[0]) * 2));
+	campipe_output_set_ldc(op, ldc);
 
 	drawcall_set_mvp(op->dc, mvp);
 	drawcall_set_viewport(op->dc, 0, 0, width, height);
