@@ -5,79 +5,6 @@
 #include "drawcall.h"
 #include "shader.h"
 
-const char font_widths[128] =  {
-	[' '] = 5,
-	['!'] = 5,
-	['"'] = 7,
-	['#'] = 7,
-	['$'] = 7,
-	['%'] = 7,
-	['&'] = 8,
-	['\''] = 4,
-	['('] = 4,
-	[')'] = 4,
-	['*'] = 7,
-	['+'] = 7,
-	[','] = 4,
-	['-'] = 5,
-	['.'] = 4,
-	['/'] = 6,
-	['0'] = 7,
-	['1'] = 7,
-	['2'] = 7,
-	['3'] = 7,
-	['4'] = 7,
-	['5'] = 7,
-	['6'] = 7,
-	['7'] = 7,
-	['8'] = 7,
-	['9'] = 7,
-	[':'] = 4,
-	[';'] = 4,
-	['<'] = 5,
-	['='] = 5,
-	['>'] = 5,
-	['?'] = 7,
-	['@'] = 9,
-	['A'] = 7,
-	['B'] = 7,
-	['C'] = 7,
-	['D'] = 7,
-	['E'] = 7,
-	['F'] = 7,
-	['G'] = 7,
-	['H'] = 7,
-	['I'] = 3,
-	['J'] = 7,
-	['K'] = 7,
-	['L'] = 7,
-	['M'] = 7,
-	['N'] = 7,
-	['O'] = 7,
-	['P'] = 7,
-	['Q'] = 7,
-	['R'] = 7,
-	['S'] = 7,
-	['T'] = 7,
-	['U'] = 7,
-	['V'] = 7,
-	['W'] = 7,
-	['X'] = 7,
-	['Y'] = 7,
-	['Z'] = 7,
-	['['] = 4,
-	['\\'] = 6,
-	[']'] = 4,
-	['^'] = 7,
-	['_'] = 5,
-	['`'] = 5,
-	['{'] = 5,
-	['|'] = 3,
-	['}'] = 5,
-	['~'] = 7,
-	[127] = 7,
-};
-
 struct glyph {
 	float x1, x2;
 	int width;
@@ -85,11 +12,36 @@ struct glyph {
 
 struct font {
 	struct texture *tex;
-	int nglyphs, height;
+	int height;
+	float maxy;
 	struct glyph glyphs[128];
 };
 
-struct font *font_load(const char *image, const char widths[128])
+static void get_font_widths(struct font *font, const char *charset)
+{
+	int i, c, width;
+	int pitch = font->tex->datalen / font->tex->height ;
+	unsigned char *p = (unsigned char *)font->tex->data + (pitch * font->height);
+
+	for (i = 0, c = 0, width = 0; i < font->tex->width; i++, width++, p += 4) {
+		if ((p[0] == 0xff) && (p[1] == 0xff) && (p[2] == 0xff) && (p[3] == 0xff)) {
+			if (c > strlen(charset)) {
+				fprintf(stderr, "Corrupt font image. Too many width blobs\n");
+			}
+			printf("char %c, width: %d\n", charset[c], width);
+			int ch = charset[c];
+			font->glyphs[ch].width = width;
+			width = 0;
+			c++;
+		}
+	}
+
+	if (c != strlen(charset)) {
+		fprintf(stderr, "Corrupt font image. Not enough width blobs\n");
+	}
+}
+
+struct font *font_load(const char *image, const char *charset)
 {
 	int i;
 	float inc, x = 0.0f;
@@ -98,24 +50,28 @@ struct font *font_load(const char *image, const char widths[128])
 		return NULL;
 	}
 
-	font->tex = texture_load("font.png");
+	font->tex = texture_load(image);
 	if (!font->tex) {
 		goto fail;
 	}
 	texture_set_filter(font->tex, GL_NEAREST);
 
-	font->height = font->tex->height;
+	/* The bottom row of pixels is used to detect glyph widths */
+	font->height = font->tex->height - 1;
+	font->maxy = 1.0f - (1.0f / font->tex->height);
+
+	get_font_widths(font, charset);
 
 	inc = 1.0f / (float)(font->tex->width);
+	x += inc;
 	for (i = 0; i < 128; i++) {
-		if (!widths[i]) {
+		if (!font->glyphs[i].width) {
 			continue;
 		}
 
 		font->glyphs[i].x1 = x;
-		x += widths[i] * inc;
+		x += font->glyphs[i].width * inc;
 		font->glyphs[i].x2 = x;
-		font->glyphs[i].width = widths[i];
 	}
 
 	return font;
@@ -155,7 +111,7 @@ void font_calculate(struct font *font, struct drawcall *dc, const char *str, flo
 		vp[0] = x;
 		vp[1] = y + size;
 		vp[2] = g->x1;
-		vp[3] = 1.0f;
+		vp[3] = font->maxy;
 
 		vp[4] = x;
 		vp[5] = y;
@@ -170,7 +126,7 @@ void font_calculate(struct font *font, struct drawcall *dc, const char *str, flo
 		vp[12] = x + ndc_width;
 		vp[13] = y + size;
 		vp[14] = g->x2;
-		vp[15] = 1.0f;
+		vp[15] = font->maxy;
 
 		ip[0] = (i * 4) + 0;
 		ip[1] = (i * 4) + 1;
@@ -184,9 +140,6 @@ void font_calculate(struct font *font, struct drawcall *dc, const char *str, flo
 		p++;
 		i++;
 	}
-
-	mesh_dump(vertices, strlen(str) * 4, 1);
-	mesh_indices_dump(indices, strlen(str) * 6);
 
 	drawcall_set_vertex_data(dc, vertices, sizeof(*vertices) * vsize);
 	drawcall_set_indices(dc, indices, sizeof(*indices) * isize, strlen(str) * 6);
@@ -211,12 +164,6 @@ struct drawcall *create_font_drawcall(struct font *font, int width, int height)
 		return NULL;
 	}
 
-	/*
-	 * Everything is rendered into the FBO flipped vertically, because
-	 * GL co-ordinates are the opposite of the raster scan expected
-	 * by the display. So, when drawing the FBO for "looking at"
-	 * we should flip Y to make it the right-way-up
-	 */
 	static const GLfloat mvp[] = {
 		1.0f,  0.0f,  0.0f,  0.0f,
 		0.0f,  -1.0f,  0.0f,  0.0f,

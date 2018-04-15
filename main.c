@@ -289,8 +289,7 @@ int main(int argc, char *argv[]) {
 	};
 	layer_set_transform(llayer, flipy_double);
 
-	extern const char font_widths[128];
-	struct font *f = font_load("font.png", font_widths);
+	struct font *f = font_load("font.png", " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~\x7f");
 	struct drawcall *font_dc = create_font_drawcall(f, WIDTH, HEIGHT);
 	font_calculate(f, font_dc, "BOT MATRIX!", 0.25f);
 
