@@ -244,6 +244,11 @@ int main(int argc, char *argv[]) {
 	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
 #endif
 
+	struct fbo screen = {
+		.width = WIDTH,
+		.height = HEIGHT,
+	};
+
 	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
 	check(op1);
 
@@ -267,10 +272,22 @@ int main(int argc, char *argv[]) {
 	texture_set_filter(bmt, GL_NEAREST);
 	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);
 
-	/* When drawing the FBO to the screen, we flip it with the MVP matrix */
-	vp = (struct viewport){ 0, 0, WIDTH, HEIGHT };
-	struct drawcall *last_dc = draw_fbo_drawcall(&vp, fbo);
-	check(last_dc);
+	struct compositor *screencmp = compositor_create(&screen);
+	struct layer *llayer = compositor_create_layer(screencmp);
+	layer_set_texture(llayer, fbo->texture);
+	layer_set_display_rect(llayer, 0, 0, 1.0, 1.0);
+	/*
+	 * When rendering to the screen, flip Y and scale up to -1:1
+	 * FIXME: Instead of doubling, we should have source crop support
+	 */
+	const GLfloat flipy_double[] = {
+		2.0f,  0.0f,  0.0f,  1.0f,
+		0.0f,  -2.0f,  0.0f, -1.0f,
+		0.0f,  0.0f,  1.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
+	};
+	layer_set_transform(llayer, flipy_double);
+
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -283,7 +300,7 @@ int main(int argc, char *argv[]) {
 		compositor_draw(cmp);
 
 		glClear(GL_COLOR_BUFFER_BIT);
-		drawcall_draw(last_dc);
+		compositor_draw(screencmp);
 
 		pint->swap_buffers(pint);
 		glFinish();
