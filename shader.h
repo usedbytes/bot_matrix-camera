@@ -10,5 +10,6 @@
 char *shader_load(const char *filename);
 
 GLint shader_compile(const char *vertex_shader_source, const char *fragment_shader_source);
+GLint shader_load_compile_link(const char *vs_fname, const char *fs_fname);
 
 #endif /* __SHADER_H__ */

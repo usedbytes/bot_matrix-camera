@@ -8,6 +8,7 @@
 #include <GLES2/gl2.h>
 
 struct bind {
+	char name[32];
 	GLuint bind;
 	GLuint handle;
 };
@@ -33,6 +34,7 @@ struct viewport {
 };
 
 struct attr {
+	char name[32];
 	GLuint loc;
 	GLint size;
 	GLsizei stride;

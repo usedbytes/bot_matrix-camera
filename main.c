@@ -25,12 +25,13 @@
 #include <GLES/glext.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include "compositor.h"
+#include "campipe.h"
+#include "font.h"
 #include "pint.h"
 #include "shader.h"
 #include "texture.h"
 #include "list.h"
-#include "mesh.h"
-#include "feed.h"
 #include "drawcall.h"
 #if USE_SHARED_FBO
 #include "interface/vcsm/user-vcsm.h"
@@ -52,131 +53,9 @@ extern int draw_rect(int fd, unsigned int x, unsigned int y, unsigned int w,
 
 volatile bool should_exit = 0;
 
-struct mesh *mesh;
-
 void intHandler(int dummy) {
 	printf("Caught signal.\n");
 	should_exit = 1;
-}
-
-float K[] = { 0, 0, 0, 1.0 };
-
-void brown(float xcoord, float ycoord, float *xout, float *yout)
-{
-	double asp = (double)(WIDTH) / (double)(HEIGHT);
-	double xoffs = ((double)(WIDTH - HEIGHT) / 2.0f) / (double)HEIGHT;
-	//double xdiff = (xcoord * 2) - 1;
-	double xdiff = (((xcoord * asp) - xoffs) * 2) - 1;
-	double ydiff = (ycoord * 2) - 1;
-	double r = sqrt(xdiff*xdiff + ydiff*ydiff);
-	double newr;
-	double xunit;
-	double yunit;
-
-	xunit = xdiff / r;
-	if (isnan(xunit)) {
-		xunit = 0;
-	}
-
-	yunit = ydiff / r;
-	if (isnan(yunit)) {
-		yunit = 0;
-	}
-
-
-	// Same algorithm used by ImageMagick.
-	// Defined by Professor Helmut Dersch:
-	// http://replay.waybackmachine.org/20090613040829/http://www.all-in-one.ee/~dersch/barrel/barrel.html
-	// http://www.imagemagick.org/Usage/distorts/#barrel
-	newr = r * (K[0]*pow(r, 3) + K[1]*pow(r,2) + K[2]*r + K[3]);
-
-	*xout = (((newr*xunit + 1) / 2) + xoffs) / asp;
-	*yout = (newr*yunit + 1) / 2;
-
-	/*
-	*xout = (0.5 + (xdiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
-	*yout = (0.5 + (ydiff / (1 + K[0]*(r*r) + K[1]*(r*r*r*r))));
-	*/
-
-	/*
-	*xout = xcoord + (xdiff * K[0] * r * r) + (xdiff * K[1] * r * r *r * r);
-	*yout = ycoord + (ydiff * K[0] * r * r) + (ydiff * K[1] * r * r *r * r);
-	*/
-}
-
-GLint get_shader(const char *vs_fname, const char *fs_fname)
-{
-	char *vertex_shader_source, *fragment_shader_source;
-
-	vertex_shader_source = shader_load(vs_fname);
-	if (!vertex_shader_source) {
-		return -1;
-	}
-	printf("Vertex shader:\n");
-	printf("%s\n", vertex_shader_source);
-
-	fragment_shader_source = shader_load(fs_fname);
-	if (!fragment_shader_source) {
-		return -1;
-	}
-	printf("Fragment shader:\n");
-	printf("%s\n", fragment_shader_source);
-
-	return shader_compile(vertex_shader_source, fragment_shader_source);
-}
-
-struct mesh {
-	GLfloat *mesh;
-	unsigned int nverts;
-	GLuint mhandle;
-
-	GLshort *indices;
-	unsigned int nindices;
-	GLuint ihandle;
-};
-
-struct mesh *get_mesh(const char *file)
-{
-	int xpoints, ypoints;
-	struct mesh *mesh = calloc(1, sizeof(*mesh));
-	if (!mesh) {
-		return NULL;
-	}
-
-	if (file) {
-		mesh->mesh = mesh_build_from_file(file, &mesh->nverts, &xpoints, &ypoints);
-		if (!mesh->mesh) {
-			free(mesh);
-			return NULL;
-		}
-	} else {
-		xpoints = ypoints = MESHPOINTS;
-		mesh->mesh = mesh_build(xpoints, ypoints, brown, &mesh->nverts);
-		if (!mesh->mesh) {
-			free(mesh);
-			return NULL;
-		}
-	}
-
-
-	glGenBuffers(1, &mesh->mhandle);
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->mhandle);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(mesh->mesh[0]) * mesh->nverts, mesh->mesh, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	mesh->indices = mesh_build_indices(xpoints, ypoints, &mesh->nindices);
-	if (!mesh->indices) {
-		free(mesh->mesh);
-		free(mesh);
-		return NULL;
-	}
-
-	glGenBuffers(1, &mesh->ihandle);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->ihandle);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(mesh->indices[0]) * mesh->nindices, mesh->indices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-	return mesh;
 }
 
 long elapsed_nanos(struct timespec a, struct timespec b)
@@ -189,93 +68,51 @@ long elapsed_nanos(struct timespec a, struct timespec b)
 
 struct drawcall *draw_fbo_drawcall(struct viewport *vp, struct fbo *fbo)
 {
-	GLint posLoc, tcLoc, mvpLoc, texLoc;
-	struct drawcall *dc = calloc(1, sizeof(*dc));
 	int ret;
-	dc->yidx = dc->uidx = dc->vidx = -1;
+	ret = shader_load_compile_link("vertex_shader.glsl", "quad_fs.glsl");
+	check(ret >= 0);
 
-	float min_y_ndc = 1.0f - ((float)MATRIX_H / (float)fbo->height);
-	float max_x_ndc = ((float)MATRIX_W / (float)fbo->width);
-	// Map the top-left quadrant of the fbo to 0:1 in NDC
-	// (then use the MVP matrix to map 0:1 in NDC to the viewport)
-	const GLfloat quad[] = {
-		0.0f,  0.0f, 0.0f,  min_y_ndc,
-		0.0f,  1.0f, 0.0f,  1.0f,
-		1.0f,  0.0f, max_x_ndc,  min_y_ndc,
-		1.0f,  1.0f, max_x_ndc,  1.0f,
-	};
+	struct drawcall *dc = drawcall_create(ret);
+	check(dc);
+
 	/*
-	 * Map 0:1 in NDC to the full viewport.
-	 * Don't flip Y, because we already flipped it rendering into the FBO.
+	 * The image should fill the bottom-left of the texture, so grab
+	 * the appropriate part and map to the full NDC range
 	 */
-	static const GLfloat mvp[] = {
-		2.0f,  0.0f,  0.0f,  -1.0f,
-		0.0f,  2.0f,  0.0f,  -1.0f,
-		0.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  0.0f,  0.0f,  1.0f,
+	float max_x_uv = ((float)MATRIX_W / (float)fbo->width);
+	float max_y_uv = ((float)MATRIX_H / (float)fbo->height);
+	const GLfloat quad[] = {
+		-1.0f,  -1.0f,      0.0f,     0.0f,
+		 1.0f,  -1.0f,  max_x_uv,     0.0f,
+		-1.0f,   1.0f,      0.0f, max_y_uv,
+		 1.0f,   1.0f,  max_x_uv, max_y_uv,
 	};
-
 	const GLshort idx[] = {
 		0, 1, 2, 3,
 	};
 
-	GLuint vertices, indices;
-
-	if (!vp) {
-		return NULL;
-	}
-
-	glGenBuffers(1, &vertices);
-	glBindBuffer(GL_ARRAY_BUFFER, vertices);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glGenBuffers(1, &indices);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(idx), idx, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-	ret = get_shader("vertex_shader.glsl", "quad_fs.glsl");
-	check(ret >= 0);
-	dc->shader_program = ret;
-
-	glUseProgram(dc->shader_program);
-
-	posLoc = glGetAttribLocation(dc->shader_program, "position");
-	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
-	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
-
-	dc->n_attributes = 2;
-	dc->attributes[0] = (struct attr){
-		.loc = posLoc,
-		.size = 2,
-		.stride = sizeof(quad[0]) * 4,
-		.ptr = (GLvoid *)0,
-	};
-	dc->attributes[1] = (struct attr){
-		.loc = tcLoc,
-		.size = 2,
-		.stride = sizeof(quad[0]) * 4,
-		.ptr = (GLvoid *)(sizeof(quad[0]) * 2),
+	/*
+	 * Everything is rendered into the FBO flipped vertically, because
+	 * GL co-ordinates are the opposite of the raster scan expected
+	 * by the display. So, when drawing the FBO for "looking at"
+	 * we should flip Y to make it the right-way-up
+	 */
+	static const GLfloat mvp[] = {
+		1.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  -1.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 
-	texLoc = glGetUniformLocation(dc->shader_program, "tex");
-	glUniform1i(texLoc, 0);
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+	drawcall_set_vertex_data(dc, quad, sizeof(quad));
+	drawcall_set_indices(dc, idx, sizeof(idx), sizeof(idx) / sizeof(idx[0]));
 
-	dc->n_buffers = 2;
-	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = vertices };
-	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = indices };
-	dc->n_indices = sizeof(idx) / sizeof(idx[0]);
+	drawcall_set_attribute(dc, "position", 2, sizeof(quad[0]) * 4, (GLvoid *)0);
+	drawcall_set_attribute(dc, "tc", 2, sizeof(quad[0]) * 4, (GLvoid *)(sizeof(quad[0]) * 2));
 
-	dc->n_textures = 1;
-	dc->textures[0] = (struct bind){ .bind = GL_TEXTURE_2D, .handle = fbo->texture };
-
-	dc->viewport = *vp;
-
-	dc->draw = draw_elements;
-
-	glUseProgram(0);
+	drawcall_set_mvp(dc, mvp);
+	drawcall_set_texture(dc, "tex", GL_TEXTURE_2D, fbo->texture);
+	drawcall_set_viewport(dc, vp->x, vp->y, vp->w, vp->h);
 
 	return dc;
 }
@@ -318,82 +155,6 @@ fail:
 	glDeleteFramebuffers(1, &fbo->handle);
 	free(fbo);
 	return NULL;
-}
-
-struct drawcall *get_camera_drawcall(const char *vs_fname, const char *fs_fname, struct viewport *vp, struct fbo *fbo)
-{
-	/*
-	 * Simple MVP matrix which flips the Y axis (so 0,0 is top left) and
-	 * scales/translates everything so that on-screen points are 0-1
-	 */
-	static const GLfloat mvp[] = {
-		2.0f,  0.0f,  0.0f,  -1.0f,
-		0.0f, -2.0f,  0.0f,  1.0f,
-		0.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  0.0f,  0.0f,  1.0f,
-	};
-
-	GLint posLoc, tcLoc, mvpLoc, texLoc;
-	struct drawcall *dc = calloc(1, sizeof(*dc));
-	int ret;
-
-	if (!vp) {
-		return NULL;
-	}
-
-	dc->yidx = dc->uidx = dc->vidx = -1;
-
-	ret = get_shader(vs_fname, fs_fname);
-	check(ret >= 0);
-	dc->shader_program = ret;
-
-	glUseProgram(dc->shader_program);
-
-	posLoc = glGetAttribLocation(dc->shader_program, "position");
-	tcLoc = glGetAttribLocation(dc->shader_program, "tc");
-	mvpLoc = glGetUniformLocation(dc->shader_program, "mvp");
-
-	dc->n_attributes = 2;
-	dc->attributes[0] = (struct attr){
-		.loc = posLoc,
-		.size = 2,
-		.stride = sizeof(mesh->mesh[0]) * 4,
-		.ptr = (GLvoid *)0,
-	};
-	dc->attributes[1] = (struct attr){
-		.loc = tcLoc,
-		.size = 2,
-		.stride = sizeof(mesh->mesh[0]) * 4,
-		.ptr = (GLvoid *)(sizeof(mesh->mesh[0]) * 2),
-	};
-
-	texLoc = glGetUniformLocation(dc->shader_program, "ytex");
-	glUniform1i(texLoc, 0);
-	texLoc = glGetUniformLocation(dc->shader_program, "utex");
-	glUniform1i(texLoc, 1);
-	texLoc = glGetUniformLocation(dc->shader_program, "vtex");
-	glUniform1i(texLoc, 2);
-	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
-
-	dc->n_buffers = 2;
-	dc->buffers[0] = (struct bind){ .bind = GL_ARRAY_BUFFER, .handle = mesh->mhandle };
-	dc->buffers[1] = (struct bind){ .bind = GL_ELEMENT_ARRAY_BUFFER, .handle = mesh->ihandle };
-	dc->n_indices = mesh->nindices;
-
-	dc->n_textures = 3;
-	// TEXTURE0,1,2 is Y,U,V
-	dc->yidx = 0;
-	dc->uidx = 1;
-	dc->vidx = 2;
-
-	dc->viewport = *vp;
-
-	dc->fbo = fbo;
-	dc->draw = draw_elements;
-
-	glUseProgram(0);
-
-	return dc;
 }
 
 #if USE_SHARED_FBO
@@ -440,33 +201,18 @@ int main(int argc, char *argv[]) {
 
 	signal(SIGINT, intHandler);
 
-	/*
-	if (argc == 5) {
-		sscanf(argv[1], "%f", &K[0]);
-		sscanf(argv[2], "%f", &K[1]);
-		sscanf(argv[3], "%f", &K[2]);
-		sscanf(argv[4], "%f", &K[3]);
-
-		K[3] = K[3] - (K[0] + K[1] + K[2]);
-	}
-	*/
 	pm_init(argv[0], 0);
-
-	mesh = get_mesh(argc == 2 ? argv[1] : NULL);
-	check(mesh);
 
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-	struct feed *feed = feed_init(pint);
-	check(feed);
-
-	struct drawcall *dc;
-	struct list_head drawcalls;
-	list_init(&drawcalls);
+	struct campipe *cp = campipe_init(pint, argc == 2 ? argv[1] : NULL);
+	check(cp);
 
 #if USE_SHARED_FBO
 	printf("Using shared FBO\n");
@@ -496,51 +242,71 @@ int main(int argc, char *argv[]) {
 		.data = buf,
 	};
 #else
-	struct fbo *fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
+	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
 #endif
 
-	struct viewport vp = { 0, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
-	dc = get_camera_drawcall("vertex_shader.glsl", "y_shader.glsl", &vp, NULL);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	struct fbo screen = {
+		.width = WIDTH,
+		.height = HEIGHT,
+	};
 
-	vp = (struct viewport){ 0, 0, WIDTH / 2, HEIGHT / 2 };
-	dc = get_camera_drawcall("vertex_shader.glsl", "u_shader.glsl", &vp, NULL);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
+	check(op1);
 
-	vp = (struct viewport){ WIDTH / 2, 0, WIDTH / 2, HEIGHT / 2 };
-	dc = get_camera_drawcall("vertex_shader.glsl", "v_shader.glsl", &vp, NULL);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	struct campipe_output *op2 = campipe_output_create(cp, 32, 32, false);
+	check(op2);
 
-	vp = (struct viewport){ 0, fbo->height - MATRIX_H, MATRIX_W, MATRIX_H };
-	dc = get_camera_drawcall("vertex_shader.glsl", FRAGMENT_SHADER, &vp, fbo);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	struct compositor *cmp = compositor_create(fbo);
+	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
+	compositor_set_viewport(cmp, &vp);
+	check(cmp);
 
-	vp = (struct viewport){ WIDTH / 2, HEIGHT / 2, WIDTH / 2, HEIGHT / 2 };
-	dc = draw_fbo_drawcall(&vp, fbo);
-	check(dc);
-	list_add_end(&drawcalls, &dc->list);
+	struct layer *camlayer = compositor_create_layer(cmp);
+	layer_set_texture(camlayer, campipe_output_get_texture(op1));
+	layer_set_display_rect(camlayer, 0, 0, 1.0, 1.0);
+
+	struct texture *bmt = texture_load("bot_m.png");
+	check(bmt);
+
+	struct layer *layer = compositor_create_layer(cmp);
+	layer_set_texture(layer, bmt->handle);
+	texture_set_filter(bmt, GL_NEAREST);
+	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);
+
+	struct compositor *screencmp = compositor_create(&screen);
+	struct layer *llayer = compositor_create_layer(screencmp);
+	layer_set_texture(llayer, fbo->texture);
+	layer_set_display_rect(llayer, 0, 0, 1.0, 1.0);
+	/*
+	 * When rendering to the screen, flip Y and scale up to -1:1
+	 * FIXME: Instead of doubling, we should have source crop support
+	 */
+	const GLfloat flipy_double[] = {
+		2.0f,  0.0f,  0.0f,  1.0f,
+		0.0f,  -2.0f,  0.0f, -1.0f,
+		0.0f,  0.0f,  1.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
+	};
+	layer_set_transform(llayer, flipy_double);
+
+	struct font *f = font_load("font.png", " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~\x7f");
+	struct drawcall *font_dc = create_font_drawcall(f, WIDTH, HEIGHT);
+	font_calculate(f, font_dc, "BOT MATRIX!", 0.25f);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
-		i = feed->dequeue(feed);
+		i = campipe_dequeue(cp);
 		if (i != 0) {
 			fprintf(stderr, "Failed dequeueing\n");
 			break;
 		}
 
+		compositor_draw(cmp);
+
 		glClear(GL_COLOR_BUFFER_BIT);
+		compositor_draw(screencmp);
 
-		struct list_head *l = drawcalls.next;
-		while (l != &drawcalls) {
-			dc = (struct drawcall *)l;
-			drawcall_draw(feed, dc);
-
-			l = l->next;
-		}
+		drawcall_draw(font_dc);
 
 		pint->swap_buffers(pint);
 		glFinish();
@@ -568,7 +334,7 @@ int main(int argc, char *argv[]) {
 		}
 #endif
 
-		feed->queue(feed);
+		campipe_queue(cp);
 
 		clock_gettime(CLOCK_MONOTONIC, &b);
 		if (a.tv_sec != b.tv_sec) {
@@ -579,7 +345,7 @@ int main(int argc, char *argv[]) {
 	}
 
 fail:
-	feed->terminate(feed);
+	campipe_exit(cp);
 	pint->terminate(pint);
 #if USE_SHARED_FBO
 	vcsm_exit();
