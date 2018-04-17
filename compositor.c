@@ -7,6 +7,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <stdio.h>
+#include <string.h>
 #include "compositor.h"
 #include "shader.h"
 #include "texture.h"
@@ -27,6 +28,7 @@ struct layer {
 
 	struct compositor *cmp;
 	struct drawcall *dc;
+	GLfloat mvp[16];
 };
 
 void compositor_set_viewport(struct compositor *cmp, struct viewport *vp) {
@@ -66,6 +68,12 @@ void compositor_draw(struct compositor *cmp)
 	struct list_head *node = cmp->layers.next;
 	while (node != &cmp->layers) {
 		struct layer *layer = (struct layer *)node;
+
+		/*
+		 * All the layers share a shader, so we need to set the mvp
+		 * here
+		 */
+		drawcall_set_mvp(layer->dc, layer->mvp);
 		drawcall_draw(layer->dc);
 
 		node = node->next;
@@ -180,7 +188,5 @@ void layer_set_display_rect(struct layer *layer, float x, float y, float w, floa
 
 void layer_set_transform(struct layer *layer, const GLfloat *m4)
 {
-	glUseProgram(layer->dc->shader_program);
-	glUniformMatrix4fv(layer->cmp->mvpLoc, 1, GL_FALSE, m4);
-	glUseProgram(0);
+	memcpy(layer->mvp, m4, sizeof(layer->mvp));
 }
