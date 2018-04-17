@@ -129,6 +129,7 @@ static struct drawcall *get_drawcall(struct compositor *cmp)
 	dc->fbo = cmp->fbo;
 
 	dc->shader_program = cmp->shader;
+	dc->mvp = glGetUniformLocation(dc->shader_program, "mvp");
 
 	glUseProgram(dc->shader_program);
 
