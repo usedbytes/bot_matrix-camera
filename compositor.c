@@ -66,6 +66,12 @@ struct compositor *compositor_create(struct fbo *fbo)
 void compositor_draw(struct compositor *cmp)
 {
 	struct list_head *node = cmp->layers.next;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, cmp->fbo->handle);
+	glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 	while (node != &cmp->layers) {
 		struct layer *layer = (struct layer *)node;
 
