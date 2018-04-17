@@ -23,8 +23,9 @@ struct compositor {
 };
 
 struct layer {
-	struct compositor *cmp;
 	struct list_head list;
+
+	struct compositor *cmp;
 	struct drawcall *dc;
 };
 
