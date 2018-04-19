@@ -1,5 +1,4 @@
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +104,7 @@ void element_array_free(struct element_array *a)
 void element_array_append(struct element_array *a, struct element_array *b)
 {
 	size_t i, iidx;
-	a->vertices = reallocarray(a->vertices, a->nverts + b->nverts, sizeof(*a->vertices));
+	a->vertices = realloc(a->vertices, (a->nverts + b->nverts) * sizeof(*a->vertices));
 	memcpy(&a->vertices[a->nverts], b->vertices, sizeof(*b->vertices) * b->nverts);
 	a->nverts = a->nverts + b->nverts;
 
@@ -113,7 +112,7 @@ void element_array_append(struct element_array *a, struct element_array *b)
 	for (i = 0; i < b->nidx; i++) {
 		b->indices[i] += iidx;
 	}
-	a->indices = reallocarray(a->indices, a->nidx + b->nidx, sizeof(*a->indices));
+	a->indices = realloc(a->indices, (a->nidx + b->nidx) * sizeof(*a->indices));
 	memcpy(&a->indices[a->nidx], b->indices, sizeof(*b->indices) * b->nidx);
 	a->nidx = a->nidx + b->nidx;
 
