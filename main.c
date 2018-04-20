@@ -367,7 +367,7 @@ int main(int argc, char *argv[]) {
 	element_array_free(arr);
 	*/
 
-	calculate_label(f, font_dc, "BOT\nMATRIX\nTEST");
+	calculate_label(f, font_dc, "BOT\nMATRIX");
 
 	struct texture font_tex = {
 		.handle = font_fbo->texture,
