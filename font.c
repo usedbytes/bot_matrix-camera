@@ -1,8 +1,11 @@
 
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "texture.h"
 #include "drawcall.h"
+#include "font.h"
 #include "shader.h"
 
 struct glyph {
@@ -81,20 +84,58 @@ fail:
 	return NULL;
 }
 
-void font_calculate(struct font *font, struct drawcall *dc, const char *str, float size)
+struct element_array *element_array_alloc(size_t nverts, size_t nidx)
 {
+	struct element_array *a = calloc(1, sizeof(*a));
+
+	a->nverts = nverts;
+	a->vertices = calloc(nverts, sizeof(*a->vertices));
+	a->nidx = nidx;
+	a->indices = calloc(nidx, sizeof(*a->indices));
+
+	return a;
+}
+
+void element_array_free(struct element_array *a)
+{
+	free(a->vertices);
+	free(a->indices);
+}
+
+void element_array_append(struct element_array *a, struct element_array *b)
+{
+	size_t i, iidx;
+	a->vertices = reallocarray(a->vertices, a->nverts + b->nverts, sizeof(*a->vertices));
+	memcpy(&a->vertices[a->nverts], b->vertices, sizeof(*b->vertices) * b->nverts);
+	a->nverts = a->nverts + b->nverts;
+
+	iidx = (a->nidx * 4) / 6;
+	for (i = 0; i < b->nidx; i++) {
+		b->indices[i] += iidx;
+	}
+	a->indices = reallocarray(a->indices, a->nidx + b->nidx, sizeof(*a->indices));
+	memcpy(&a->indices[a->nidx], b->indices, sizeof(*b->indices) * b->nidx);
+	a->nidx = a->nidx + b->nidx;
+
+	element_array_free(b);
+}
+
+struct element_array *font_calculate(struct font *font, const char *str,
+			    float x, float y, float size)
+{
+	size_t len = strlen(str);
+	struct element_array *a = element_array_alloc(len * 4 * 4, len * 6);
 	int i = 0;
 	int c;
 	const char *p = str;
 	struct glyph *g;
-	float *vertices = calloc(strlen(str) * 4 * 4, sizeof(*vertices));
-	GLshort *indices = calloc(strlen(str) * 6, sizeof(*indices));
 	float *vp;
 	GLshort *ip;
-	size_t vsize = sizeof(*vertices) * strlen(str) * 4 * 4;
-	size_t isize = sizeof(*indices) * strlen(str) * 6;
+	float e = size / font->height;
 
-	float x = -1.0f, y = 1.0f - size, e = size / font->height;
+	printf("Calculate '%s' at %2.3f,%2.3f\n", str, x, y);
+
+	y = y - size;
 
 	while (*p) {
 		c = *p;
@@ -105,8 +146,8 @@ void font_calculate(struct font *font, struct drawcall *dc, const char *str, flo
 
 		float ndc_width = e * (g->width);
 
-		vp = &vertices[i * 16];
-		ip = &indices[i * 6];
+		vp = &a->vertices[i * 16];
+		ip = &a->indices[i * 6];
 
 		vp[0] = x;
 		vp[1] = y + size;
@@ -141,8 +182,33 @@ void font_calculate(struct font *font, struct drawcall *dc, const char *str, flo
 		i++;
 	}
 
-	drawcall_set_vertex_data(dc, vertices, sizeof(*vertices) * vsize);
-	drawcall_set_indices(dc, indices, sizeof(*indices) * isize, strlen(str) * 6);
+	return a;
+}
+
+float font_calculate_width(struct font *font, const char *str, float size)
+{
+	int c;
+	const char *p = str;
+	struct glyph *g;
+
+	float x = 0.0f, e = size / font->height;
+
+	while (*p) {
+		c = *p;
+		if (!font->glyphs[c].width) {
+			c = 127;
+		}
+		g = &font->glyphs[c];
+
+		x += e * (g->width - 1);
+
+		p++;
+	}
+
+	x += e;
+
+	printf("Width '%s': %2.3f\n", str, x);
+	return x;
 }
 
 static void draw_triangles(struct drawcall *dc)

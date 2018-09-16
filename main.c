@@ -193,6 +193,22 @@ void *async(void *p) {
 }
 #endif
 
+float centre_align(struct font *font, const char *str, float size, int pixel_width)
+{
+	float width = font_calculate_width(font, str, size);
+	float x = (width / 2);
+
+	float pixel = 2.0f / pixel_width;
+	float rem = fmod(x, pixel);
+	if (rem < pixel / 2) {
+		x -= rem;
+	} else {
+		x += (pixel - rem);
+	}
+
+	return -x;
+}
+
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
@@ -289,9 +305,37 @@ int main(int argc, char *argv[]) {
 	};
 	layer_set_transform(llayer, flipy_double);
 
+	struct fbo *font_fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
+	check(font_fbo);
 	struct font *f = font_load("font.png", " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~\x7f");
-	struct drawcall *font_dc = create_font_drawcall(f, WIDTH, HEIGHT);
-	font_calculate(f, font_dc, "BOT MATRIX!", 0.25f);
+	struct drawcall *font_dc = create_font_drawcall(f, MATRIX_W, MATRIX_H);
+	drawcall_set_fbo(font_dc, font_fbo);
+
+	float x = centre_align(f, "BOT", 18.0f / 32.0f, MATRIX_W);
+	struct element_array *arr = font_calculate(f, "BOT", x, 0, 18.0f / 32.0f);
+	x = centre_align(f, "MATRIX", 18.0f / 32.0f, MATRIX_W);
+	struct element_array *arrb = font_calculate(f, "MATRIX", x, 0.5, 18.0f / 32.0f);
+	element_array_append(arr, arrb);
+
+	drawcall_set_vertex_data(font_dc, arr->vertices, sizeof(*arr->vertices) * arr->nverts);
+	drawcall_set_indices(font_dc, arr->indices, sizeof(*arr->indices) * arr->nidx, arr->nidx);
+	drawcall_set_viewport(font_dc, 0, 0, MATRIX_W, MATRIX_H);
+	element_array_free(arr);
+
+	struct texture font_tex = {
+		.handle = font_fbo->texture,
+	};
+	struct layer *font_layer = compositor_create_layer(cmp);
+	layer_set_texture(font_layer, font_fbo->texture);
+	texture_set_filter(&font_tex, GL_NEAREST);
+	layer_set_display_rect(font_layer, 0, 0, 1.0, 1.0);
+	static const GLfloat flipy[] = {
+		1.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  -1.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  0.0f,  0.0f,  1.0f,
+	};
+	layer_set_transform(font_layer, flipy);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -306,6 +350,10 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT);
 		compositor_draw(screencmp);
 
+		/* Draw the text */
+		glBindFramebuffer(GL_FRAMEBUFFER, font_dc->fbo->handle);
+		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 		drawcall_draw(font_dc);
 
 		pint->swap_buffers(pint);
