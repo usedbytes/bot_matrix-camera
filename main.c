@@ -42,11 +42,11 @@
 
 #define check(_cond) { if (!(_cond)) { fprintf(stderr, "%s:%d: %s\n", __func__, __LINE__, strerror(errno)); exit(EXIT_FAILURE); }}
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 480
+#define HEIGHT 640
 #define MESHPOINTS 32
-#define MATRIX_W 32
-#define MATRIX_H 32
+#define MATRIX_W 480
+#define MATRIX_H 640
 
 volatile bool should_exit = 0;
 
@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	/* For rendering into "the" FBO */
-	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
+	struct fbo *fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
 	struct compositor *fbo_cmp = compositor_create(fbo);
 	check(fbo_cmp);
 	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
@@ -193,8 +193,8 @@ int main(int argc, char *argv[]) {
 	 * FIXME: Instead of doubling, we should have source crop support
 	 */
 	const GLfloat flipy_double[] = {
-		2.0f,  0.0f,  0.0f,  1.0f,
-		0.0f,  -2.0f,  0.0f, -1.0f,
+		1.0f,  0.0f,  0.0f,  0.0f,
+		0.0f,  -1.0f,  0.0f, 0.0f,
 		0.0f,  0.0f,  1.0f,  0.0f,
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
@@ -203,7 +203,7 @@ int main(int argc, char *argv[]) {
 	/* Camera is a layer on the FBO compositor */
 	struct campipe *cp = campipe_init(pint, argc == 2 ? argv[1] : NULL);
 	check(cp);
-	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
+	struct campipe_output *op1 = campipe_output_create(cp, MATRIX_W, MATRIX_H, true);
 	check(op1);
 	struct layer *camlayer = compositor_create_layer(fbo_cmp);
 	layer_set_texture(camlayer, campipe_output_get_texture(op1));
