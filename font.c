@@ -231,7 +231,7 @@ struct drawcall *create_font_drawcall(struct font *font, int width, int height)
 
 	static const GLfloat mvp[] = {
 		1.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  -1.0f,  0.0f,  0.0f,
+		0.0f,  1.0f,  0.0f,  0.0f,
 		0.0f,  0.0f,  0.0f,  0.0f,
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};

@@ -193,20 +193,64 @@ void *async(void *p) {
 }
 #endif
 
+float round_to_pix(float a, int pixel_width)
+{
+	float pixel = 2.0f / pixel_width;
+	float rem = fmod(a, pixel);
+	if (rem < pixel / 2) {
+		a -= rem;
+	} else {
+		a += (pixel - rem);
+	}
+
+	return a;
+}
+
 float centre_align(struct font *font, const char *str, float size, int pixel_width)
 {
 	float width = font_calculate_width(font, str, size);
 	float x = (width / 2);
 
-	float pixel = 2.0f / pixel_width;
-	float rem = fmod(x, pixel);
-	if (rem < pixel / 2) {
-		x -= rem;
-	} else {
-		x += (pixel - rem);
+	x = -round_to_pix(x, pixel_width);
+
+	return x;
+}
+
+void calculate_label(struct font *font, struct drawcall *dc, const char *str)
+{
+	struct element_array *arr = element_array_alloc(0, 0);
+	float size = 18.0f / MATRIX_H;
+	int nwords = 1;
+
+	const char *p = str;
+	while(*p) {
+		if (*p == '\n')
+			nwords++;
+		p++;
 	}
 
-	return -x;
+	float height = size * nwords;
+	float y = round_to_pix(((2.0f - height) / 2) + size - 1.0, MATRIX_H);
+
+	char *dup = strdup(str);
+	char *word = strtok(dup, "\n");
+	while (word) {
+		float x = centre_align(font, word, size, MATRIX_W);
+
+		printf("Token: %s, x: %2.3f, y: %2.3f\n", word, x, y);
+
+		struct element_array *barr = font_calculate(font, word, x, y, size);
+		element_array_append(arr, barr);
+
+		word = strtok(NULL, "\n");
+		y += size;
+	}
+
+	drawcall_set_vertex_data(dc, arr->vertices, sizeof(*arr->vertices) * arr->nverts);
+	drawcall_set_indices(dc, arr->indices, sizeof(*arr->indices) * arr->nidx, arr->nidx);
+
+	element_array_free(arr);
+	free(dup);
 }
 
 int main(int argc, char *argv[]) {
@@ -308,7 +352,10 @@ int main(int argc, char *argv[]) {
 	struct font *f = font_load("font.png", " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~\x7f");
 	struct drawcall *font_dc = create_font_drawcall(f, MATRIX_W, MATRIX_H);
 	drawcall_set_fbo(font_dc, font_fbo);
+	drawcall_set_viewport(font_dc, 0, 0, MATRIX_W, MATRIX_H);
 
+
+	/*
 	float x = centre_align(f, "BOT", 18.0f / 32.0f, MATRIX_W);
 	struct element_array *arr = font_calculate(f, "BOT", x, 0, 18.0f / 32.0f);
 	x = centre_align(f, "MATRIX", 18.0f / 32.0f, MATRIX_W);
@@ -317,8 +364,10 @@ int main(int argc, char *argv[]) {
 
 	drawcall_set_vertex_data(font_dc, arr->vertices, sizeof(*arr->vertices) * arr->nverts);
 	drawcall_set_indices(font_dc, arr->indices, sizeof(*arr->indices) * arr->nidx, arr->nidx);
-	drawcall_set_viewport(font_dc, 0, 0, MATRIX_W, MATRIX_H);
 	element_array_free(arr);
+	*/
+
+	calculate_label(f, font_dc, "BOT\nMATRIX\nTEST");
 
 	struct texture font_tex = {
 		.handle = font_fbo->texture,
@@ -327,6 +376,7 @@ int main(int argc, char *argv[]) {
 	layer_set_texture(font_layer, font_fbo->texture);
 	texture_set_filter(&font_tex, GL_NEAREST);
 	layer_set_display_rect(font_layer, 0, 0, 1.0, 1.0);
+	/*
 	static const GLfloat flipy[] = {
 		1.0f,  0.0f,  0.0f,  0.0f,
 		0.0f,  -1.0f,  0.0f,  0.0f,
@@ -334,6 +384,7 @@ int main(int argc, char *argv[]) {
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 	layer_set_transform(font_layer, flipy);
+	*/
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
