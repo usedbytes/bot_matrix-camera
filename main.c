@@ -232,45 +232,20 @@ int main(int argc, char *argv[]) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-	struct campipe *cp = campipe_init(pint, argc == 2 ? argv[1] : NULL);
-	check(cp);
-
-#if USE_SHARED_FBO
-	printf("Using shared FBO\n");
-
-	i = vcsm_init();
-	fprintf(stderr, "vcsm_init(): %d\n", i);
-
-	uint32_t spd = 3300000;
-	struct fbo *fbo = shared_fbo_create(pint, MATRIX_W, MATRIX_H);
-#else
+	/* For rendering into "the" FBO */
 	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
-#endif
+	struct compositor *fbo_cmp = compositor_create(fbo);
+	check(fbo_cmp);
+	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
+	compositor_set_viewport(fbo_cmp, &vp);
 
+	/* For composing things onto the screen */
 	struct fbo screen = {
 		.width = WIDTH,
 		.height = HEIGHT,
 	};
-
-	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
-	check(op1);
-
-	struct campipe_output *op2 = campipe_output_create(cp, 32, 32, false);
-	check(op2);
-
-	struct compositor *cmp = compositor_create(fbo);
-	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
-	compositor_set_viewport(cmp, &vp);
-	check(cmp);
-
-	struct layer *camlayer = compositor_create_layer(cmp);
-	layer_set_texture(camlayer, campipe_output_get_texture(op1));
-	layer_set_display_rect(camlayer, 0, 0, 1.0, 1.0);
-
-#define SCREENCMP
-#ifdef SCREENCMP
-	struct compositor *screencmp = compositor_create(&screen);
-	struct layer *llayer = compositor_create_layer(screencmp);
+	struct compositor *screen_cmp = compositor_create(&screen);
+	struct layer *llayer = compositor_create_layer(screen_cmp);
 	layer_set_texture(llayer, fbo->texture);
 	layer_set_display_rect(llayer, 0, 0, 1.0, 1.0);
 	/*
@@ -284,49 +259,15 @@ int main(int argc, char *argv[]) {
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 	layer_set_transform(llayer, flipy_double);
-#else
-	struct viewport fbo_vp = (struct viewport){ 0, 0, WIDTH, HEIGHT };
-	struct drawcall *fbo_dc = draw_fbo_drawcall(&fbo_vp, fbo);
-#endif
 
-	struct fbo *font_fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
-	check(font_fbo);
-	struct font *f = font_load("font.png", " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`{|}~\x7f");
-	struct drawcall *font_dc = create_font_drawcall(f, MATRIX_W, MATRIX_H);
-	drawcall_set_fbo(font_dc, font_fbo);
-	drawcall_set_viewport(font_dc, 0, 0, MATRIX_W, MATRIX_H);
-
-
-	/*
-	float x = centre_align(f, "BOT", 18.0f / 32.0f, MATRIX_W);
-	struct element_array *arr = font_calculate(f, "BOT", x, 0, 18.0f / 32.0f);
-	x = centre_align(f, "MATRIX", 18.0f / 32.0f, MATRIX_W);
-	struct element_array *arrb = font_calculate(f, "MATRIX", x, 0.5, 18.0f / 32.0f);
-	element_array_append(arr, arrb);
-
-	drawcall_set_vertex_data(font_dc, arr->vertices, sizeof(*arr->vertices) * arr->nverts);
-	drawcall_set_indices(font_dc, arr->indices, sizeof(*arr->indices) * arr->nidx, arr->nidx);
-	element_array_free(arr);
-	*/
-
-	calculate_label(f, font_dc, "BOT\nMATRIX");
-
-	struct texture font_tex = {
-		.handle = font_fbo->texture,
-	};
-	struct layer *font_layer = compositor_create_layer(cmp);
-	layer_set_texture(font_layer, font_fbo->texture);
-	texture_set_filter(&font_tex, GL_NEAREST);
-	layer_set_display_rect(font_layer, 0, 0, 1.0, 1.0);
-	/*
-	static const GLfloat flipy[] = {
-		1.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  -1.0f,  0.0f,  0.0f,
-		0.0f,  0.0f,  0.0f,  0.0f,
-		0.0f,  0.0f,  0.0f,  1.0f,
-	};
-	layer_set_transform(font_layer, flipy);
-	*/
+	/* Camera is a layer on the FBO compositor */
+	struct campipe *cp = campipe_init(pint, argc == 2 ? argv[1] : NULL);
+	check(cp);
+	struct campipe_output *op1 = campipe_output_create(cp, 32, 32, true);
+	check(op1);
+	struct layer *camlayer = compositor_create_layer(fbo_cmp);
+	layer_set_texture(camlayer, campipe_output_get_texture(op1));
+	layer_set_display_rect(camlayer, 0, 0, 1.0, 1.0);
 
 	clock_gettime(CLOCK_MONOTONIC, &a);
 	while(!pint->should_end(pint)) {
@@ -339,18 +280,11 @@ int main(int argc, char *argv[]) {
 		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		/* Draw the text */
-		glBindFramebuffer(GL_FRAMEBUFFER, font_dc->fbo->handle);
-		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		drawcall_draw(font_dc);
+		/* Draw camera to the FBO */
+		compositor_draw(fbo_cmp);
 
-		compositor_draw(cmp);
-#ifdef SCREENCMP
-		compositor_draw(screencmp);
-#else
-		drawcall_draw(fbo_dc);
-#endif
+		/* Draw FBO to the screen */
+		compositor_draw(screen_cmp);
 
 		pint->swap_buffers(pint);
 		glFinish();
