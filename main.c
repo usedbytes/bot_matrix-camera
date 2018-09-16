@@ -48,9 +48,6 @@
 #define MATRIX_W 32
 #define MATRIX_H 32
 
-extern int draw_rect(int fd, unsigned int x, unsigned int y, unsigned int w,
-	      unsigned int h, char *data, unsigned int stride, bool flip);
-
 volatile bool should_exit = 0;
 
 void intHandler(int dummy) {
@@ -157,42 +154,6 @@ fail:
 	return NULL;
 }
 
-#if USE_SHARED_FBO
-struct foo {
-	int fd;
-	char *data;
-};
-
-void dump_hex(unsigned int len, char *data) {
-	unsigned int i;
-
-	for (i = 0; i < len; i++) {
-		printf("%02x", data[i]);
-	}
-	printf("\n");
-}
-
-void *async(void *p) {
-	struct foo *foo = p;
-
-	draw_rect(foo->fd, 0, 0, 32, 16, foo->data, 64 * 4, false);
-	draw_rect(foo->fd, 0, 16, 32, 16, foo->data + (64 * 4 * 16), 64 * 4, true);
-
-	/*
-	int i;
-	char *d = foo->data;
-	printf("=====================\n");
-	for (i = 0; i < 32; i++) {
-		dump_hex(32 * 4, d);
-		d += 64*4;
-	}
-	printf("=====================\n");
-	*/
-
-	return NULL;
-}
-#endif
-
 float round_to_pix(float a, int pixel_width)
 {
 	float pixel = 2.0f / pixel_width;
@@ -282,25 +243,6 @@ int main(int argc, char *argv[]) {
 
 	uint32_t spd = 3300000;
 	struct fbo *fbo = shared_fbo_create(pint, MATRIX_W, MATRIX_H);
-	static char buf[64 * 4 * 32];
-	pthread_t id;
-	bool have_thread = false;
-
-	int fd = open("/dev/spidev1.2", O_RDWR);
-	if (fd < 0) {
-		fprintf(stderr, "Failed opening spidev: %s\n", strerror(errno));
-		return 1;
-	}
-	i = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &spd);
-	if (i != 0) {
-		fprintf(stderr, "Failed setting spidev WR: %s\n", strerror(errno));
-		goto fail;
-	}
-
-	struct foo foo = {
-		.fd = fd,
-		.data = buf,
-	};
 #else
 	struct fbo *fbo = create_fbo(MATRIX_W * 2, MATRIX_H * 2, 0);
 #endif
@@ -412,29 +354,6 @@ int main(int argc, char *argv[]) {
 
 		pint->swap_buffers(pint);
 		glFinish();
-
-#if USE_SHARED_FBO
-		{
-			int32_t stride;
-			char *map = shared_fbo_map(fbo, &stride);
-			if (!map) {
-				fprintf(stderr, "Failed to map shared buffer\n");
-				break;
-			}
-
-			if (have_thread) {
-				pthread_join(id, NULL);
-			}
-			memcpy(buf, map, stride * 32);
-			i = pthread_create(&id, NULL, async, &foo);
-			if (i != 0) {
-				fprintf(stderr, "Failed creating thread: %s\n", strerror(errno));
-			}
-			have_thread = true;
-
-			shared_fbo_unmap(fbo);
-		}
-#endif
 
 		campipe_queue(cp);
 
