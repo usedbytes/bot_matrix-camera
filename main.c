@@ -281,14 +281,8 @@ int main(int argc, char *argv[]) {
 	layer_set_texture(camlayer, campipe_output_get_texture(op1));
 	layer_set_display_rect(camlayer, 0, 0, 1.0, 1.0);
 
-	struct texture *bmt = texture_load("bot_m.png");
-	check(bmt);
-
-	struct layer *layer = compositor_create_layer(cmp);
-	layer_set_texture(layer, bmt->handle);
-	texture_set_filter(bmt, GL_NEAREST);
-	layer_set_display_rect(layer, 0, 0, 1.0, 1.0);
-
+#define SCREENCMP
+#ifdef SCREENCMP
 	struct compositor *screencmp = compositor_create(&screen);
 	struct layer *llayer = compositor_create_layer(screencmp);
 	layer_set_texture(llayer, fbo->texture);
@@ -304,6 +298,10 @@ int main(int argc, char *argv[]) {
 		0.0f,  0.0f,  0.0f,  1.0f,
 	};
 	layer_set_transform(llayer, flipy_double);
+#else
+	struct viewport fbo_vp = (struct viewport){ 0, 0, WIDTH, HEIGHT };
+	struct drawcall *fbo_dc = draw_fbo_drawcall(&fbo_vp, fbo);
+#endif
 
 	struct fbo *font_fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
 	check(font_fbo);
@@ -345,16 +343,21 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 
-		compositor_draw(cmp);
-
+		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-		compositor_draw(screencmp);
 
 		/* Draw the text */
 		glBindFramebuffer(GL_FRAMEBUFFER, font_dc->fbo->handle);
 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		drawcall_draw(font_dc);
+
+		compositor_draw(cmp);
+#ifdef SCREENCMP
+		compositor_draw(screencmp);
+#else
+		drawcall_draw(fbo_dc);
+#endif
 
 		pint->swap_buffers(pint);
 		glFinish();
