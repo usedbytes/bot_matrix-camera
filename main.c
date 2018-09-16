@@ -33,9 +33,9 @@
 #include "texture.h"
 #include "list.h"
 #include "drawcall.h"
+#include "shared_fbo.h"
 #if USE_SHARED_FBO
 #include "interface/vcsm/user-vcsm.h"
-#include "shared_fbo.h"
 #endif
 
 #include "EGL/egl.h"
@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	/* For rendering into "the" FBO */
-	struct fbo *fbo = create_fbo(MATRIX_W, MATRIX_H, 0);
+	struct fbo *fbo = shared_fbo_create(pint, MATRIX_W, MATRIX_H);
 	struct compositor *fbo_cmp = compositor_create(fbo);
 	check(fbo_cmp);
 	struct viewport vp = (struct viewport){ 0, 0, MATRIX_W, MATRIX_H };
