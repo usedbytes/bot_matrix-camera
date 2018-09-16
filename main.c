@@ -154,66 +154,6 @@ fail:
 	return NULL;
 }
 
-float round_to_pix(float a, int pixel_width)
-{
-	float pixel = 2.0f / pixel_width;
-	float rem = fmod(a, pixel);
-	if (rem < pixel / 2) {
-		a -= rem;
-	} else {
-		a += (pixel - rem);
-	}
-
-	return a;
-}
-
-float centre_align(struct font *font, const char *str, float size, int pixel_width)
-{
-	float width = font_calculate_width(font, str, size);
-	float x = (width / 2);
-
-	x = -round_to_pix(x, pixel_width);
-
-	return x;
-}
-
-void calculate_label(struct font *font, struct drawcall *dc, const char *str)
-{
-	struct element_array *arr = element_array_alloc(0, 0);
-	float size = 18.0f / MATRIX_H;
-	int nwords = 1;
-
-	const char *p = str;
-	while(*p) {
-		if (*p == '\n')
-			nwords++;
-		p++;
-	}
-
-	float height = size * nwords;
-	float y = round_to_pix(((2.0f - height) / 2) + size - 1.0, MATRIX_H);
-
-	char *dup = strdup(str);
-	char *word = strtok(dup, "\n");
-	while (word) {
-		float x = centre_align(font, word, size, MATRIX_W);
-
-		printf("Token: %s, x: %2.3f, y: %2.3f\n", word, x, y);
-
-		struct element_array *barr = font_calculate(font, word, x, y, size);
-		element_array_append(arr, barr);
-
-		word = strtok(NULL, "\n");
-		y += size;
-	}
-
-	drawcall_set_vertex_data(dc, arr->vertices, sizeof(*arr->vertices) * arr->nverts);
-	drawcall_set_indices(dc, arr->indices, sizeof(*arr->indices) * arr->nidx, arr->nidx);
-
-	element_array_free(arr);
-	free(dup);
-}
-
 int main(int argc, char *argv[]) {
 	int i;
 	struct timespec a, b;
