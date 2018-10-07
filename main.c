@@ -27,6 +27,7 @@
 #include <EGL/eglext.h>
 #include "compositor.h"
 #include "campipe.h"
+#include "../libcomm/comm.h"
 #include "font.h"
 #include "pint.h"
 #include "shader.h"
@@ -167,6 +168,9 @@ int main(int argc, char *argv[]) {
 	printf("GL_VERSION  : %s\n", glGetString(GL_VERSION) );
 	printf("GL_RENDERER : %s\n", glGetString(GL_RENDERER) );
 
+	struct comm *comm = comm_init_tcp(9876);
+	check(comm);
+
 	glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 	glViewport(0, 0, WIDTH, HEIGHT);
 	glEnable(GL_BLEND);
@@ -228,6 +232,20 @@ int main(int argc, char *argv[]) {
 
 		pint->swap_buffers(pint);
 		glFinish();
+
+		char *ptr = shared_fbo_map(fbo, NULL);
+		if (ptr) {
+			int ret = comm_send(comm, 0x11, 8 + MATRIX_W * MATRIX_H * 4, NULL);
+			if (ret != 0 && ret != -EAGAIN) {
+				printf("Ret: %d\n", ret);
+			}
+			uint32_t tmp = MATRIX_W;
+			comm_send(comm, 0, 4, (uint8_t *)&tmp);
+			tmp = MATRIX_H;
+			comm_send(comm, 0, 4, (uint8_t *)&tmp);
+			comm_send(comm, 0, MATRIX_W * MATRIX_H * 4, (uint8_t *)ptr);
+			shared_fbo_unmap(fbo);
+		}
 
 		campipe_queue(cp);
 

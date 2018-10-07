@@ -15,7 +15,7 @@
 
 #define CAMERA_WIDTH 640
 #define CAMERA_HEIGHT 480
-#define CAMERA_FPS 60
+#define CAMERA_FPS 20
 
 struct feed_camera {
 	struct feed base;

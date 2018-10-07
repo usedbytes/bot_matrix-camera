@@ -91,6 +91,10 @@ fail:
 char *shared_fbo_map(struct fbo *base, int32_t *stride)
 {
 	struct vcsm_fbo *fbo = (struct vcsm_fbo *)base;
+	if (fbo->map) {
+		return fbo->map;
+	}
+
 	fbo->map = (char *)vcsm_lock(fbo->vcsm_handle);
 	if (!fbo->map) {
 		return NULL;

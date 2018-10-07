@@ -1,7 +1,7 @@
 TARGET=camera
-SRC=main.c shader.c texture.c mesh.c drawcall.c list.c compositor.c campipe.c font.c
+SRC=main.c shader.c texture.c mesh.c drawcall.c list.c compositor.c campipe.c font.c ../libcomm/comm.c
 LDFLAGS=-lnetpbm -lm -lpng
-CFLAGS=-g -Wall -I/usr/include/netpbm
+CFLAGS=-g -Wall -I/usr/include/netpbm -I../libcomm
 
 ifeq ($(PINT),glfw)
     SRC += pint_glfw.c feed_nocamera.c readpixels_shared_fbo.c
