@@ -12,14 +12,11 @@ void main()
 	highp float u = texture2D(utex,v_TexCoord).r;
 	highp float v = texture2D(vtex,v_TexCoord).r;
 
-	highp vec4 res;
-	//res.r = (y + (1.370705 * (v-0.5)));
-	//res.b = (y - (0.698001 * (v-0.5)) - (0.337633 * (u-0.5)));
-	//res.g = (y + (1.732446 * (u-0.5)));
-	res.r = (y + (1.370705 * (v-0.5)));
-	res.b = (y - (0.698001 * (v-0.5)) - (0.337633 * (u-0.5)));
-	res.g = (y + (1.732446 * (u-0.5)));
-	res.a = 1.0;
+	highp vec4 rgb;
+	rgb.r = (y + (1.370705 * (v-0.5)));
+	rgb.g = (y - (0.698001 * (v-0.5)) - (0.337633 * (u-0.5)));
+	rgb.b = (y + (1.732446 * (u-0.5)));
+	rgb.a = 1.0;
 
-	gl_FragColor = clamp(res,vec4(0),vec4(1));
+	gl_FragColor = clamp(rgb, 0.0, 1.0);
 }
