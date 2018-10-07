@@ -60,6 +60,16 @@ static int init_ldc_mesh(struct campipe *cp, const char *file)
 	return 0;
 }
 
+int campipe_enable(struct campipe *cp)
+{
+	return cp->feed->enable(cp->feed);
+}
+
+int campipe_disable(struct campipe *cp)
+{
+	return cp->feed->disable(cp->feed);
+}
+
 struct campipe *campipe_init(struct pint *pint, const char *ldc_file)
 {
 	int ret;

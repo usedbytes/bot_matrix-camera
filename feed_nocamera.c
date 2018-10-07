@@ -29,6 +29,16 @@ static void queue(struct feed *f)
 	return;
 }
 
+static int enable(struct feed *f)
+{
+	return 0;
+}
+
+static int disable(struct feed *f)
+{
+	return 0;
+}
+
 struct feed *feed_init(struct pint *pint)
 {
 	struct texture *tex;
@@ -101,6 +111,8 @@ struct feed *feed_init(struct pint *pint)
 	feed->terminate = terminate;
 	feed->dequeue = dequeue;
 	feed->queue = queue;
+	feed->enable = enable;
+	feed->disable = disable;
 
 	return feed;
 }

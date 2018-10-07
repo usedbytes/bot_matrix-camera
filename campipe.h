@@ -17,6 +17,9 @@ struct campipe_output *campipe_output_create(struct campipe *cp, int width, int 
 // campipe_output_destroy();
 int campipe_output_get_texture(struct campipe_output *op);
 
+int campipe_disable(struct campipe *cp);
+int campipe_enable(struct campipe *cp);
+
 int campipe_dequeue(struct campipe *cp);
 void campipe_queue(struct campipe *cp);
 

@@ -41,6 +41,18 @@ static void terminate(struct feed *f)
 	free(feed);
 }
 
+static int enable(struct feed *f)
+{
+	struct feed_camera *feed = (struct feed_camera *)f;
+	return camera_enable(feed->camera);
+}
+
+static int disable(struct feed *f)
+{
+	struct feed_camera *feed = (struct feed_camera *)f;
+	return camera_disable(feed->camera);
+}
+
 static int dequeue(struct feed *f)
 {
 	struct feed_camera *feed = (struct feed_camera *)f;
@@ -149,6 +161,8 @@ struct feed *feed_init(struct pint *pint)
 	feed->base.terminate = terminate;
 	feed->base.dequeue = dequeue;
 	feed->base.queue = queue;
+	feed->base.enable = enable;
+	feed->base.disable = disable;
 
 	return &feed->base;
 }

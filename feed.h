@@ -18,6 +18,8 @@ struct feed {
 	void (*terminate)(struct feed *f);
 	int (*dequeue)(struct feed *f);
 	void (*queue)(struct feed *f);
+	int (*disable)(struct feed *f);
+	int (*enable)(struct feed *f);
 };
 
 struct feed *feed_init(struct pint *pint);

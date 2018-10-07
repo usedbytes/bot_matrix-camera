@@ -19,3 +19,6 @@ void camera_queue_buffer(struct camera *camera, struct camera_buffer *buf);
 
 struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps);
 void camera_exit(struct camera *camera);
+
+int camera_enable(struct camera *camera);
+int camera_disable(struct camera *camera);

@@ -174,29 +174,18 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 void camera_exit(struct camera *camera)
 {
-	if (camera->port->is_enabled)
-		mmal_port_disable(camera->port);
-	buffer_pool_cleanup(camera->pool);
-	component_cleanup(camera->component);
+	camera_disable(camera);
 	free(camera);
 }
 
-struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps)
+int camera_enable(struct camera *camera)
 {
-	struct camera *camera = calloc(1, sizeof(*camera));
 	RASPICAM_CAMERA_PARAMETERS default_parameters = { 0 };
 	MMAL_BUFFER_HEADER_T *buf;
 	MMAL_ES_FORMAT_T *format;
 	MMAL_STATUS_T ret;
 	MMAL_PORT_T *ports[2];
 	int i, iret;
-
-	if (!camera)
-		return NULL;
-
-	camera->width = width;
-	camera->height = height;
-	camera->fps = fps;
 
 	ret = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &camera->component);
 	if (ret != MMAL_SUCCESS)
@@ -223,8 +212,8 @@ struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps)
 		.stills_yuv422 = 0,
 		.stills_yuv422 = 0,
 		.one_shot_stills = 1,
-		.max_preview_video_w = width,
-		.max_preview_video_h = height,
+		.max_preview_video_w = camera->width,
+		.max_preview_video_h = camera->height,
 		.num_preview_video_frames = 3,
 		.stills_capture_circular_buffer_height = 0,
 		.fast_preview_resume = 0,
@@ -253,13 +242,13 @@ struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps)
 	format = camera->port->format;
 	format->encoding = MMAL_ENCODING_OPAQUE;
 	format->encoding_variant = MMAL_ENCODING_I420;
-	format->es->video.width = width;
-	format->es->video.height = height;
+	format->es->video.width = camera->width;
+	format->es->video.height = camera->height;
 	format->es->video.crop.x = 0;
 	format->es->video.crop.y = 0;
-	format->es->video.crop.width = width;
-	format->es->video.crop.height = height;
-	format->es->video.frame_rate.num = fps;
+	format->es->video.crop.width = camera->width;
+	format->es->video.crop.height = camera->height;
+	format->es->video.frame_rate.num = camera->fps;
 	format->es->video.frame_rate.den = 1;
 	ret = mmal_port_format_commit(camera->port);
 	if (ret != MMAL_SUCCESS)
@@ -317,9 +306,39 @@ struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps)
 	if (i != camera->port->buffer_num)
 		fprintf(stderr, "Queued an unexpected number of buffers (%d)\n", i);
 
-	return camera;
+	return 0;
 
 fail:
+	return -1;
+}
+
+int camera_disable(struct camera *camera)
+{
+	if (camera->port->is_enabled)
+		mmal_port_disable(camera->port);
+	buffer_pool_cleanup(camera->pool);
+	component_cleanup(camera->component);
+
+	return 0;
+}
+
+struct camera *camera_init(uint32_t width, uint32_t height, unsigned int fps)
+{
+	int ret;
+	struct camera *camera = calloc(1, sizeof(*camera));
+
+	if (!camera)
+		return NULL;
+
+	camera->width = width;
+	camera->height = height;
+	camera->fps = fps;
+
+	ret = camera_enable(camera);
+	if (!ret) {
+		return camera;
+	}
+
 	camera_exit(camera);
 	return NULL;
 }
