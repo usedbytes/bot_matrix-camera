@@ -161,6 +161,7 @@ int main(int argc, char *argv[]) {
 	struct pint *pint = pint_initialise(WIDTH, HEIGHT);
 	check(pint);
 
+	signal(SIGPIPE, SIG_IGN);
 	signal(SIGINT, intHandler);
 
 	pm_init(argv[0], 0);
@@ -236,14 +237,18 @@ int main(int argc, char *argv[]) {
 		char *ptr = shared_fbo_map(fbo, NULL);
 		if (ptr) {
 			int ret = comm_send(comm, 0x11, 8 + MATRIX_W * MATRIX_H * 4, NULL);
-			if (ret != 0 && ret != -EAGAIN) {
-				printf("Ret: %d\n", ret);
-			}
+
 			uint32_t tmp = MATRIX_W;
-			comm_send(comm, 0, 4, (uint8_t *)&tmp);
+			if (!ret) {
+				ret = comm_send(comm, 0, 4, (uint8_t *)&tmp);
+			}
 			tmp = MATRIX_H;
-			comm_send(comm, 0, 4, (uint8_t *)&tmp);
-			comm_send(comm, 0, MATRIX_W * MATRIX_H * 4, (uint8_t *)ptr);
+			if (!ret) {
+				ret = comm_send(comm, 0, 4, (uint8_t *)&tmp);
+			}
+			if (!ret) {
+				ret = comm_send(comm, 0, MATRIX_W * MATRIX_H * 4, (uint8_t *)ptr);
+			}
 			shared_fbo_unmap(fbo);
 		}
 
