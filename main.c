@@ -45,8 +45,8 @@
 #define WIDTH 480
 #define HEIGHT 640
 #define MESHPOINTS 32
-#define MATRIX_W 480
-#define MATRIX_H 640
+#define MATRIX_W 128
+#define MATRIX_H 128
 
 volatile bool should_exit = 0;
 
@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
 	struct compositor *screen_cmp = compositor_create(&screen);
 	struct layer *llayer = compositor_create_layer(screen_cmp);
 	layer_set_texture(llayer, fbo->texture);
-	layer_set_display_rect(llayer, 0, 0, 1.0, 1.0);
+	layer_set_display_rect(llayer, 0, 0, 0.5, 0.5);
 	/*
 	 * When rendering to the screen, flip Y and scale up to -1:1
 	 * FIXME: Instead of doubling, we should have source crop support

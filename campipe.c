@@ -181,8 +181,8 @@ struct campipe_output *campipe_output_create(struct campipe *cp, int width, int 
 	 * scales/translates everything so that on-screen points are 0-1
 	 */
 	static const GLfloat mvp[] = {
+		 2.0f,  0.0f,  0.0f, -1.0f,
 		 0.0f,  2.0f,  0.0f,  -1.0f,
-		 2.0f,  0.0f,  0.0f,  -1.0f,
 		 0.0f,  0.0f,  0.0f,   0.0f,
 		 0.0f,  0.0f,  0.0f,   1.0f,
 	};
